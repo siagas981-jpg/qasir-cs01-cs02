@@ -84,8 +84,9 @@ async def create_cashier(body: NewCashier, _owner: dict = Depends(require_owner)
             json={"role": "cashier", "outlet_id": body.outlet_id, "full_name": body.full_name},
             headers={"Prefer": "return=representation"},
         )
-    if u.status_code != 200 or not u.json():
-        raise HTTPException(500, "User created but profile assignment failed")
+        if u.status_code != 200 or not u.json():
+            await c.delete(f"/auth/v1/admin/users/{uid}")
+            raise HTTPException(500, "Profile assignment failed; user creation rolled back")
     return u.json()[0]
 
 
