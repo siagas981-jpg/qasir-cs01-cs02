@@ -9,7 +9,7 @@ ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / ".env")
 
 from fastapi import FastAPI, APIRouter, Depends, HTTPException, Header  # noqa: E402
-from pydantic import BaseModel, EmailStr, Field  # noqa: E402
+from pydantic import BaseModel, Field  # noqa: E402
 from starlette.middleware.cors import CORSMiddleware  # noqa: E402
 
 from supabase_admin import client  # noqa: E402
@@ -42,11 +42,16 @@ async def require_owner(user: dict = Depends(current_user)) -> dict:
     return user
 
 
-class NewCashier(BaseModel):
-    email: EmailStr
-    password: str = Field(min_length=8)
+class NewEmployee(BaseModel):
+    email: str = Field(min_length=3)
+    password: str = Field(min_length=6)
     full_name: Optional[str] = None
+    role: str = "cashier"
     outlet_id: str
+
+
+class NewPassword(BaseModel):
+    password: str = Field(min_length=6)
 
 
 @api.get("/")
@@ -62,8 +67,12 @@ async def health():
     return {"supabase": "ok" if ok else "error", "status_code": r.status_code}
 
 
-@api.post("/staff", status_code=201)
-async def create_cashier(body: NewCashier, _owner: dict = Depends(require_owner)):
+@api.post("/employees", status_code=201)
+async def create_employee(body: NewEmployee, _owner: dict = Depends(require_owner)):
+    if body.role not in ("cashier", "manager"):
+        raise HTTPException(400, "Role harus cashier atau manager")
+    if "@" not in body.email or "." not in body.email.split("@")[-1]:
+        raise HTTPException(400, "Email tidak valid")
     async with client() as c:
         o = await c.get("/rest/v1/outlets", params={"id": f"eq.{body.outlet_id}", "select": "id"})
         if o.status_code != 200 or not o.json():
@@ -81,13 +90,35 @@ async def create_cashier(body: NewCashier, _owner: dict = Depends(require_owner)
         u = await c.patch(
             "/rest/v1/profiles",
             params={"id": f"eq.{uid}"},
-            json={"role": "cashier", "outlet_id": body.outlet_id, "full_name": body.full_name},
+            json={"role": body.role, "outlet_id": body.outlet_id, "full_name": body.full_name, "is_active": True},
             headers={"Prefer": "return=representation"},
         )
         if u.status_code != 200 or not u.json():
             await c.delete(f"/auth/v1/admin/users/{uid}")
             raise HTTPException(500, "Profile assignment failed; user creation rolled back")
     return u.json()[0]
+
+
+@api.post("/employees/{uid}/password")
+async def reset_employee_password(uid: str, body: NewPassword, owner: dict = Depends(require_owner)):
+    if uid == owner["id"]:
+        raise HTTPException(400, "Gunakan halaman reset password untuk akun sendiri")
+    async with client() as c:
+        r = await c.put(f"/auth/v1/admin/users/{uid}", json={"password": body.password})
+    if r.status_code != 200:
+        raise HTTPException(400, "Gagal mengatur ulang password")
+    return {"ok": True}
+
+
+@api.delete("/employees/{uid}")
+async def delete_employee(uid: str, owner: dict = Depends(require_owner)):
+    if uid == owner["id"]:
+        raise HTTPException(400, "Tidak bisa menghapus akun sendiri")
+    async with client() as c:
+        r = await c.delete(f"/auth/v1/admin/users/{uid}")
+    if r.status_code not in (200, 204):
+        raise HTTPException(400, "Gagal menghapus user")
+    return {"ok": True}
 
 
 app.include_router(api)

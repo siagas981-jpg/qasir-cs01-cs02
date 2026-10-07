@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
+import { toast } from "sonner";
 import { supabase } from "@/lib/supabase/client";
 
 const AuthCtx = createContext(null);
@@ -29,6 +30,12 @@ export function AuthProvider({ children }) {
     (async () => {
       setLoading(true);
       const { data: p } = await supabase.from("profiles").select("*").eq("id", uid).single();
+      if (p && p.is_active === false) {
+        toast.error("Akun Anda dinonaktifkan. Hubungi owner.");
+        await supabase.auth.signOut();
+        setLoading(false);
+        return;
+      }
       setProfile(p);
       const list = await loadOutlets();
       setActiveOutletId(p?.role === "cashier" ? p.outlet_id : list[0]?.id ?? null);

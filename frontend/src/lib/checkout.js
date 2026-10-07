@@ -3,6 +3,7 @@ import { supabase } from "@/lib/supabase/client";
 const MESSAGES = {
   INSUFFICIENT_STOCK: "Stok tidak cukup — transaksi dibatalkan",
   INSUFFICIENT_PAYMENT: "Uang bayar kurang dari total",
+  ACCOUNT_INACTIVE: "Akun dinonaktifkan. Hubungi owner.",
   FORBIDDEN_OUTLET: "Anda tidak punya akses ke outlet ini",
   PRODUCT_NOT_FOUND: "Produk tidak ditemukan di outlet ini",
   EMPTY_CART: "Keranjang kosong",

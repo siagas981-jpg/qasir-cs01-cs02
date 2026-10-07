@@ -9,7 +9,7 @@ import POS from "@/pages/POS";
 import Transactions from "@/pages/Transactions";
 import Products from "@/pages/Products";
 import Outlets from "@/pages/Outlets";
-import Staff from "@/pages/Staff";
+import Employees from "@/pages/Employees";
 
 import ResetPassword from "@/pages/ResetPassword";
 
@@ -27,7 +27,7 @@ function App() {
             <Route path="transactions" element={<Transactions />} />
             <Route path="products" element={<Owner><Products /></Owner>} />
             <Route path="outlets" element={<Owner><Outlets /></Owner>} />
-            <Route path="staff" element={<Owner><Staff /></Owner>} />
+            <Route path="employees" element={<Owner><Employees /></Owner>} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

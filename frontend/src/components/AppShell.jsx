@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { NavLink, Outlet } from "react-router-dom";
-import { LogOut, Store } from "lucide-react";
+import { LogOut, Store, Users } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
 import { useConnection } from "@/hooks/useConnection";
@@ -13,7 +13,7 @@ const NAV = [
   { to: "/transactions", label: "Transaksi", id: "nav-transactions" },
   { to: "/products", label: "Produk", id: "nav-products", owner: true },
   { to: "/outlets", label: "Outlet", id: "nav-outlets", owner: true },
-  { to: "/staff", label: "Staf", id: "nav-staff", owner: true },
+  { to: "/employees", label: "Kelola Karyawan", id: "nav-employees", owner: true, icon: Users },
 ];
 
 function StatusBadge({ online, healthy }) {
@@ -49,8 +49,8 @@ export default function AppShell() {
           <nav className="flex items-center gap-1 overflow-x-auto no-scrollbar">
             {NAV.filter((n) => !n.owner || isOwner).map((n) => (
               <NavLink key={n.to} to={n.to} end={n.end} data-testid={n.id}
-                className={({ isActive }) => `whitespace-nowrap rounded-md px-3 py-2 text-sm font-semibold transition-colors ${isActive ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"}`}>
-                {n.label}
+                className={({ isActive }) => `whitespace-nowrap rounded-md px-3 py-2 text-sm font-semibold transition-colors inline-flex items-center gap-1.5 ${isActive ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"}`}>
+                {n.icon && <n.icon className="h-4 w-4" />}{n.label}
               </NavLink>
             ))}
           </nav>
