@@ -11,6 +11,8 @@ import Products from "@/pages/Products";
 import Outlets from "@/pages/Outlets";
 import Staff from "@/pages/Staff";
 
+import ResetPassword from "@/pages/ResetPassword";
+
 const Owner = ({ children }) => <RouteGuard ownerOnly>{children}</RouteGuard>;
 
 function App() {
@@ -19,6 +21,7 @@ function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<Login />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
           <Route element={<RouteGuard><AppShell /></RouteGuard>}>
             <Route index element={<POS />} />
             <Route path="transactions" element={<Transactions />} />
