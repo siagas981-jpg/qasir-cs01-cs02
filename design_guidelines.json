@@ -1,0 +1,119 @@
+{
+  "project_name": "CS Qasir",
+  "archetype": "Swiss High-Contrast & Tactical Retail POS",
+  "theme": {
+    "default_mode": "light",
+    "theme_switchable": true,
+    "rationale": "High readability for fast-paced retail and cashier environments under bright store lighting, with dark mode toggle for evening operations."
+  },
+  "typography": {
+    "heading_font": "Outfit, sans-serif",
+    "body_font": "Plus Jakarta Sans, sans-serif",
+    "mono_font": "JetBrains Mono, monospace",
+    "hierarchy": {
+      "h1_hero": "text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight",
+      "h2_section": "text-xl sm:text-2xl font-bold tracking-tight",
+      "h3_subsection": "text-lg font-semibold",
+      "h4_card": "text-base font-semibold",
+      "body": "text-sm sm:text-base leading-relaxed",
+      "small_label": "text-xs font-medium uppercase tracking-wider text-muted-foreground",
+      "currency_display": "font-mono font-bold tracking-tight text-emerald-600 dark:text-emerald-400"
+    }
+  },
+  "colors": {
+    "palette_name": "Indonesian Retail Emerald & Warm Zinc",
+    "base": {
+      "bg_light": "#F8FAFC",
+      "bg_dark": "#0F172A",
+      "surface_light": "#FFFFFF",
+      "surface_dark": "#1E293B",
+      "border_light": "#E2E8F0",
+      "border_dark": "#334155"
+    },
+    "brand_accents": {
+      "primary": "#059669",
+      "primary_hover": "#047857",
+      "primary_active": "#065F46",
+      "primary_foreground": "#FFFFFF",
+      "secondary": "#0284C7",
+      "accent_amber": "#D97706",
+      "accent_rose": "#E11D48"
+    },
+    "status": {
+      "online": "#10B981",
+      "offline": "#EF4444",
+      "pending_queue": "#F59E0B",
+      "low_stock": "#F59E0B",
+      "out_of_stock": "#EF4444",
+      "in_stock": "#10B981"
+    },
+    "forbidden_colors": [
+      "#7351B7",
+      "#1B93A4",
+      "#000000"
+    ]
+  },
+  "layout_and_spacing": {
+    "pos_screen_grid": "grid-cols-1 lg:grid-cols-12 gap-4 h-[calc(100vh-4rem)] overflow-hidden",
+    "product_catalog_span": "col-span-1 lg:col-span-7 xl:col-span-8 overflow-y-auto p-4 md:p-6",
+    "cart_panel_span": "col-span-1 lg:col-span-5 xl:col-span-4 bg-background border-l border-border flex flex-col justify-between h-full p-4",
+    "bento_dashboard_grid": "grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4 p-4 md:p-6",
+    "padding_rule": "Containers with borders must use internal padding (p-4 to p-8) to prevent visual element collision.",
+    "dense_table_style": "High density, cardless table rows with subtle row dividers and crisp hover states"
+  },
+  "pos_specific_rules": {
+    "currency_formatting": "Always format money as Rupiah integers e.g. 'Rp 15.000', 'Rp 250.000'. Never use decimals for IDR.",
+    "quick_cash_buttons": [
+      5000,
+      10000,
+      20000,
+      50000,
+      100000,
+      "Exact Amount"
+    ],
+    "cart_steppers": "Use prominent + / - stepper buttons with minimum 44px touch target size for touch/tablet efficiency.",
+    "offline_queue": "Show persistent status bar item for Supabase connection + pending queue item counter badge with trigger modal/sheet."
+  },
+  "components_and_ui": {
+    "forms_and_inputs": "Use Shadcn Form, Input, Select, Checkbox, Dialog, Sheet, and Popover. Never standard raw select tags.",
+    "dropdowns": "DO NOT use transparent backgrounds in dropdown-menu or popovers. Use backdrop-blur-xl bg-background/95 border.",
+    "toasts": "Use Sonner toast notifications from /app/src/components/ui/sonner.jsx",
+    "navigation_header": "Header must have sticky z-50 position with backdrop-blur-md bg-background/90 border-b. Visible menu links + outlet switcher + user profile role badge."
+  },
+  "testing_ids": {
+    "mandatory_rule": "All interactive and key informational elements MUST include data-testid attribute in kebab-case.",
+    "examples": {
+      "login_email": "login-email-input",
+      "login_password": "login-password-input",
+      "login_submit": "login-submit-button",
+      "pos_search": "pos-product-search-input",
+      "product_card": "product-card-{id}",
+      "add_to_cart": "add-to-cart-button-{id}",
+      "cart_qty_increase": "cart-qty-increase-{id}",
+      "cart_qty_decrease": "cart-qty-decrease-{id}",
+      "cart_item_remove": "cart-item-remove-{id}",
+      "cart_checkout_button": "cart-checkout-button",
+      "pay_dialog_cash_input": "pay-dialog-cash-input",
+      "quick_cash_btn": "quick-cash-button-{amount}",
+      "pay_submit_button": "pay-submit-button",
+      "change_amount_display": "change-amount-display",
+      "outlet_switcher": "outlet-switcher-dropdown",
+      "sync_status_badge": "supabase-sync-status-badge",
+      "offline_queue_panel": "offline-queue-panel-trigger"
+    }
+  },
+  "image_urls": {
+    "pos_hero_banner": "https://images.unsplash.com/photo-1764194790147-8a1e47a91a3f?crop=entropy&cs=srgb&fm=jpg&q=85",
+    "store_counter": "https://images.unsplash.com/photo-1781232770088-6c2e89dc38e5?crop=entropy&cs=srgb&fm=jpg&q=85",
+    "inventory_clerk": "https://images.unsplash.com/photo-1764795849885-e226e3cabe87?crop=entropy&cs=srgb&fm=jpg&q=85",
+    "cashier_tablet": "https://images.unsplash.com/photo-1764795849833-6e9d6e399a77?crop=entropy&cs=srgb&fm=jpg&q=85"
+  },
+  "UNIVERSAL GUIDELINES FOR MAIN AGENT": [
+    "You tend to converge toward generic outputs. Create creative, crisp, high-contrast POS designs that delight Indonesian cashier and business owners.",
+    "DO NOT use dark colors as gradients.",
+    "Never center align the entire app container.",
+    "Micro-animations on hover, click, and state changes for instant cashier feedback.",
+    "Always set explicit text color on hover (e.g., hover:bg-slate-900 hover:text-white).",
+    "Include data-testid on all interactive elements as specified."
+  ]
+}
