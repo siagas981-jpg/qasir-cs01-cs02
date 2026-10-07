@@ -22,7 +22,8 @@ User choices: Supabase project was empty → create all tables (outlets, product
 - Offline queue: saves sale when offline, auto-flush on reconnect, failed entries retry/discard
 - Transactions history w/ line items + today totals; Products CRUD; Outlets CRUD; Staff (create cashier, assign outlet)
 - Health check on app load (console + status badge)
-- Testing: iteration_1 — backend 9/9, frontend 12/12 passed
+- Forgot/reset password: "Lupa password?" dialog on login (resetPasswordForEmail with redirectTo /reset-password), ResetPassword.jsx recovery page (PASSWORD_RECOVERY session, updateUser, alert + back to login). Tested E2E via admin generate_link. Requires redirect URL allowlisted in Supabase.
+- Testing: iteration_1 — backend 9/9, frontend 12/12; iteration_2 (reset password) — 11/11
 
 ## Backlog
 - P1: Receipt print / share, daily sales report per outlet

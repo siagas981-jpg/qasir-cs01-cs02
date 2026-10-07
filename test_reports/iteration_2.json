@@ -1,0 +1,38 @@
+{
+  "summary": "Frontend-only testing of forgot/reset password feature. All 11 test scenarios passed including the full E2E recovery flow (admin generate_link -> /reset-password form -> updateUser -> native 'Password changed' alert -> redirect to /login -> login with new password). Owner password was restored to Qasir#Owner2026 via admin API after the test and re-login with original password was verified. Regressions (owner/cashier login, auth guard redirects, /reset-password public access) all pass. Mobile 390px renders without horizontal overflow on both /login and /reset-password.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "tests_executed": {
+    "forgot_password_dialog_opens": true,
+    "forgot_password_generic_message_shown_for_unknown_email": true,
+    "reset_password_no_session_shows_invalid_state_with_back_to_login": true,
+    "reset_password_no_session_does_NOT_render_form": true,
+    "owner_login_regression": true,
+    "cashier_login_regression": true,
+    "login_redirects_to_root_when_already_authenticated": true,
+    "protected_route_redirects_unauth_to_login": true,
+    "reset_password_route_is_public_and_does_not_redirect_when_authed": true,
+    "full_recovery_flow_e2e": "action_link -> form renders -> submit new password -> native alert 'Password changed' -> redirect to /login -> login with new password works",
+    "password_restored_and_original_login_verified": true,
+    "mobile_390px_login_no_horizontal_overflow": true,
+    "mobile_390px_reset_password_no_horizontal_overflow": true
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "ResetPassword.jsx getSession() fallback intentionally accepts ANY existing session (including a pre-existing normal login) as 'ready' — this means a logged-in user visiting /reset-password sees the reset form (not inherently wrong, but it changes the password of whichever user is currently logged in). Confirmed by test STEP4. Acceptable since route is public per design, but worth documenting.",
+    "sendReset in Login.jsx surfaces supabase errors directly via 'ERR:' prefix which could leak implementation details to users (e.g., rate-limit messages). Consider always returning the generic success message to avoid email enumeration regardless of error, except for client-side validation.",
+    "Login.jsx forgot dialog does not reset forgotMsg when dialog is re-opened for a different email — stale success/error can show until a new submit. Minor UX nit."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (frontend-only)", "frontend": "100%"},
+  "test_credentials": "owner siagas981@gmail.com / Qasir#Owner2026 (restored), cashier cashier@csqasir.test / Qasir#Cashier2026",
+  "seed_data_creation": "None. Only transient password change during E2E, restored via admin API.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Reset-password feature is working end-to-end. Owner password is Qasir#Owner2026 (restored). Recovery tokens are single-use and ~60s rate-limited per user; always generate link immediately before visiting. ResetPassword.jsx uses getSession() fallback so a currently-logged-in user visiting /reset-password will see the form — this is by design but may be surprising."
+}
