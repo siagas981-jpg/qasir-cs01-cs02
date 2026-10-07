@@ -23,6 +23,7 @@ User choices: Supabase project was empty → create all tables (outlets, product
 - Transactions history w/ line items + today totals; Products CRUD; Outlets CRUD; Staff (create cashier, assign outlet)
 - Health check on app load (console + status badge)
 - Forgot/reset password: "Lupa password?" dialog on login (resetPasswordForEmail with redirectTo /reset-password), ResetPassword.jsx recovery page (PASSWORD_RECOVERY session, updateUser, alert + back to login). Tested E2E via admin generate_link. Requires redirect URL allowlisted in Supabase.
+- Employee management /employees (owner-only): table w/ search + role/outlet filters, add (server /api/employees creates auth user, roles cashier/manager), edit, reset password without email (auth admin), deactivate (is_active; login blocked, checkout RPC ACCOUNT_INACTIVE), delete (auth user + cascade). Owner rows protected. Replaces /staff. Migration: /app/supabase/migration_employees.sql. Optional Edge Functions in /app/supabase/functions/.
 - Testing: iteration_1 — backend 9/9, frontend 12/12; iteration_2 (reset password) — 11/11
 
 ## Backlog

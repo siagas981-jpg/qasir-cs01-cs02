@@ -50,22 +50,108 @@ class TestHealth:
         assert data.get("supabase") == "ok", data
 
 
-# ---------- Staff endpoint auth ----------
-class TestStaffAuth:
-    def test_staff_no_token_401(self):
-        r = requests.post(f"{BASE_URL}/api/staff", json={
+# ---------- Employees endpoint auth ----------
+class TestEmployeesAuth:
+    def test_employees_no_token_401(self):
+        r = requests.post(f"{BASE_URL}/api/employees", json={
             "email": "x@test.com", "password": "abcdefgh", "outlet_id": KEMANG_ID
         }, timeout=15)
         assert r.status_code == 401
 
-    def test_staff_cashier_forbidden_403(self, cashier_token):
+    def test_employees_cashier_forbidden_403(self, cashier_token):
         r = requests.post(
-            f"{BASE_URL}/api/staff",
+            f"{BASE_URL}/api/employees",
             headers={"Authorization": f"Bearer {cashier_token}"},
             json={"email": "x@test.com", "password": "abcdefgh", "outlet_id": KEMANG_ID},
             timeout=15,
         )
         assert r.status_code == 403
+
+    def test_owner_self_reset_blocked_400(self, owner_token):
+        # Get owner's own id
+        u = requests.get(
+            f"{SUPABASE_URL}/auth/v1/user",
+            headers={"apikey": SUPABASE_ANON, "Authorization": f"Bearer {owner_token}"},
+            timeout=15,
+        )
+        assert u.status_code == 200, u.text
+        uid = u.json()["id"]
+        r = requests.post(
+            f"{BASE_URL}/api/employees/{uid}/password",
+            headers={"Authorization": f"Bearer {owner_token}"},
+            json={"password": "WhateverPass#1"},
+            timeout=15,
+        )
+        assert r.status_code == 400, r.text
+
+    def test_owner_self_delete_blocked_400(self, owner_token):
+        u = requests.get(
+            f"{SUPABASE_URL}/auth/v1/user",
+            headers={"apikey": SUPABASE_ANON, "Authorization": f"Bearer {owner_token}"},
+            timeout=15,
+        )
+        uid = u.json()["id"]
+        r = requests.delete(
+            f"{BASE_URL}/api/employees/{uid}",
+            headers={"Authorization": f"Bearer {owner_token}"},
+            timeout=15,
+        )
+        assert r.status_code == 400, r.text
+
+    def test_full_employee_lifecycle(self, owner_token):
+        """Create -> login -> reset password -> login new -> delete -> login fails."""
+        import time, uuid
+        email = f"TEST_lifecycle_{uuid.uuid4().hex[:6]}@csqasir.test"
+        pw1 = "Pass#InitialABC1"
+        pw2 = "Pass#UpdatedXYZ2"
+        # Create
+        r = requests.post(
+            f"{BASE_URL}/api/employees",
+            headers={"Authorization": f"Bearer {owner_token}"},
+            json={"email": email, "password": pw1, "full_name": "TEST Lifecycle",
+                  "role": "cashier", "outlet_id": KEMANG_ID},
+            timeout=30,
+        )
+        assert r.status_code == 201, r.text
+        uid = r.json()["id"]
+        try:
+            # Login with pw1
+            lr = requests.post(
+                f"{SUPABASE_URL}/auth/v1/token?grant_type=password",
+                headers={"apikey": SUPABASE_ANON, "Content-Type": "application/json"},
+                json={"email": email, "password": pw1}, timeout=15,
+            )
+            assert lr.status_code == 200, lr.text
+            # Reset password
+            rr = requests.post(
+                f"{BASE_URL}/api/employees/{uid}/password",
+                headers={"Authorization": f"Bearer {owner_token}"},
+                json={"password": pw2}, timeout=15,
+            )
+            assert rr.status_code == 200, rr.text
+            time.sleep(1)
+            # Login with pw2
+            lr2 = requests.post(
+                f"{SUPABASE_URL}/auth/v1/token?grant_type=password",
+                headers={"apikey": SUPABASE_ANON, "Content-Type": "application/json"},
+                json={"email": email, "password": pw2}, timeout=15,
+            )
+            assert lr2.status_code == 200, lr2.text
+        finally:
+            # Delete
+            dr = requests.delete(
+                f"{BASE_URL}/api/employees/{uid}",
+                headers={"Authorization": f"Bearer {owner_token}"},
+                timeout=15,
+            )
+            assert dr.status_code == 200, dr.text
+        # Login should now fail
+        lr3 = requests.post(
+            f"{SUPABASE_URL}/auth/v1/token?grant_type=password",
+            headers={"apikey": SUPABASE_ANON, "Content-Type": "application/json"},
+            json={"email": email, "password": pw2}, timeout=15,
+        )
+        assert lr3.status_code >= 400
 
 
 # ---------- RLS checks via Supabase REST ----------

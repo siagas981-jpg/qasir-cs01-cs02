@@ -17,6 +17,7 @@ const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
 const authHeader = async () => {
   const { data: { session } } = await supabase.auth.getSession();
+  if (!session) throw new Error("Sesi berakhir, silakan login ulang");
   return { Authorization: `Bearer ${session.access_token}` };
 };
 
@@ -113,7 +114,7 @@ export default function Employees() {
       setModal(null);
       reload();
     } catch (err) {
-      toast.error(err.response?.data?.detail?.[0]?.msg || err.response?.data?.detail || "Gagal membuat karyawan");
+      toast.error(err.response?.data?.detail?.[0]?.msg || err.response?.data?.detail || err.message || "Gagal membuat karyawan");
     }
     setBusy(false);
   };

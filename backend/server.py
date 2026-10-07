@@ -42,6 +42,12 @@ async def require_owner(user: dict = Depends(current_user)) -> dict:
     return user
 
 
+async def _target_role(c, uid: str) -> Optional[str]:
+    p = await c.get("/rest/v1/profiles", params={"id": f"eq.{uid}", "select": "role"})
+    rows = p.json() if p.status_code == 200 else []
+    return rows[0]["role"] if rows else None
+
+
 class NewEmployee(BaseModel):
     email: str = Field(min_length=3)
     password: str = Field(min_length=6)
@@ -73,12 +79,13 @@ async def create_employee(body: NewEmployee, _owner: dict = Depends(require_owne
         raise HTTPException(400, "Role harus cashier atau manager")
     if "@" not in body.email or "." not in body.email.split("@")[-1]:
         raise HTTPException(400, "Email tidak valid")
+    email = body.email.strip().lower()
     async with client() as c:
         o = await c.get("/rest/v1/outlets", params={"id": f"eq.{body.outlet_id}", "select": "id"})
         if o.status_code != 200 or not o.json():
             raise HTTPException(400, "Outlet not found")
         r = await c.post("/auth/v1/admin/users", json={
-            "email": body.email,
+            "email": email,
             "password": body.password,
             "email_confirm": True,
             "user_metadata": {"full_name": body.full_name} if body.full_name else {},
@@ -104,9 +111,12 @@ async def reset_employee_password(uid: str, body: NewPassword, owner: dict = Dep
     if uid == owner["id"]:
         raise HTTPException(400, "Gunakan halaman reset password untuk akun sendiri")
     async with client() as c:
+        if await _target_role(c, uid) in ("owner", "admin"):
+            raise HTTPException(400, "Tidak bisa mengubah akun owner/admin")
         r = await c.put(f"/auth/v1/admin/users/{uid}", json={"password": body.password})
-    if r.status_code != 200:
-        raise HTTPException(400, "Gagal mengatur ulang password")
+        if r.status_code != 200:
+            logger.warning("admin updateUserById failed: %s %s", r.status_code, r.text)
+            raise HTTPException(400, "Gagal mengatur ulang password")
     return {"ok": True}
 
 
@@ -115,9 +125,12 @@ async def delete_employee(uid: str, owner: dict = Depends(require_owner)):
     if uid == owner["id"]:
         raise HTTPException(400, "Tidak bisa menghapus akun sendiri")
     async with client() as c:
+        if await _target_role(c, uid) in ("owner", "admin"):
+            raise HTTPException(400, "Tidak bisa menghapus akun owner/admin")
         r = await c.delete(f"/auth/v1/admin/users/{uid}")
-    if r.status_code not in (200, 204):
-        raise HTTPException(400, "Gagal menghapus user")
+        if r.status_code not in (200, 204):
+            logger.warning("admin deleteUser failed: %s %s", r.status_code, r.text)
+            raise HTTPException(400, "Gagal menghapus user")
     return {"ok": True}
 
 
