@@ -36,6 +36,14 @@ User choices: Supabase project was empty → create all tables (outlets, product
 - DB migration: `/app/supabase/migration_inventory.sql` (authoritative, idempotent, self-healing: drops stale function/trigger overloads, adds grants + FK). Applied directly via pooler connection (SQL Editor runs weren't taking effect). schema.sql kept in sync.
 - Testing: iteration_4 — Products inventory flows 9/9; iteration_5 — Inventory page + filters 100%. Test owner account: owner.inventory@qasirtest.com (see test_credentials.md). Test-generated data cleaned up; real products/data untouched.
 
+## Implemented (2026-06, Fase 1: Suppliers + Purchases + HPP rata-rata)
+- New tables: `suppliers`, `purchases`, `purchase_items`; `expense_category` enum (Sewa/Gaji/Listrik/Air/Internet/Bahan Baku/Transport/Lainnya) applied to expenses.category; `products.last_buy_price` added. `products.cost_price` = moving-average HPP.
+- Atomic RPC `receive_purchase(p_purchase_id, p_actor)` (security definer): weighted-average HPP = ((old_stock*old_hpp)+(qty*buy_price))/(old_stock+qty), updates stock + cost_price + last_buy_price, logs a 'purchase' stock_movement, sets status='Diterima'. Idempotent (ALREADY_RECEIVED guard).
+- Backend FastAPI (owner-JWT auth via service role): `/api/suppliers` GET/POST/PUT/DELETE and `/api/purchases` GET(list ?outlet_id)/GET{id}/POST/POST{id}/receive/DELETE. DELETE supplier hardened to 404 on no-op.
+- Frontend: `/dashboard/suppliers` (CRUD) and `/dashboard/purchases` (list + builder: supplier, invoice, date, item rows qty×buy_price auto-total, Draft→Terima). lib/api.js bearer-token client. Nav: Supplier, Pembelian (owner-only).
+- Migration: `/app/supabase/migration_purchasing.sql` applied directly via pooler.
+- Verified: backend curl (HPP 2333 case) + testing agent iteration_6 — 8/8 UI flows PASS, HPP Rp 1.333 confirmed on Products page. Test data cleaned up.
+
 ## Backlog
 - P1: Receipt print / share, daily sales report per outlet
 - P2: QRIS/card payment method column, dark mode

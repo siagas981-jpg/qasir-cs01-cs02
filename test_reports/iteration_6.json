@@ -1,0 +1,31 @@
+{
+  "summary": "End-to-end UI test of Fase 1 Laba Rugi (Supplier CRUD, Purchases create + receive + draft delete, weighted-average HPP verification on Products, Expenses regression with new enum). All 8 feature flows PASS. Weighted-average HPP math verified correct on Products page: ZZ UI PO Test now shows Stok=30 and Harga Modal=Rp 1.333 after receiving a 10 qty @ Rp 2.000 purchase on top of initial 20 qty @ Rp 1.000 ((20*1000+10*2000)/30 = 1333). Nav items (nav-suppliers, nav-purchases) are rendered; purchase total displays Rp 20.000; price input auto-formats to 'Rp 2.000'; receive flow transitions status Draft -> Diterima and hides receive/delete buttons; draft delete works; expense category enum lists exactly the 8 required values (Sewa, Gaji, Listrik, Air, Internet, Bahan Baku, Transport, Lainnya).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "DELETE /api/suppliers/{id}", "issue": "When the supplier is referenced by purchases (FK), the API still returns success (204 from PostgREST with 0 rows affected) and the UI shows a 'Dihapus' success toast, but the row stays. Should return 409/400 with 'Supplier masih digunakan pada pembelian' or check affected rows and raise HTTPException."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [
+    "(Optional) Harden DELETE /api/suppliers to detect FK/no-op deletes (use Prefer: return=representation or count=exact) and return a proper 409 with Indonesian message so the UI shows an error toast when the supplier has related purchases.",
+    "Main agent to clean up leftovers (per the request): received purchase 'INV-UI-1-85742' for product 'ZZ UI PO Test', the throwaway product itself, and the orphan supplier 'CV Maju Jaya' (id 6784bd3b-f68e-4cfc-9d85-d7dffc4d5b8c) — UI delete is currently blocked by FK silently."
+  ],
+  "critical_code_review_comments": [
+    "DELETE /api/suppliers in server.py does not verify any rows were actually removed by PostgREST — add a count check or Prefer: count=exact and raise 409 when 0 rows deleted so UI reflects reality.",
+    "Bookkeeping expense row uses data-testid=expense-row-${r.key} (prefixed 'e-') while the delete button uses expense-delete-${r.id} (raw uuid) — inconsistent naming makes test automation harder. Consider aligning both to the raw id (expense-row-${r.id})."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (not re-tested via pytest this run)", "frontend": "100% of requested UI flows"},
+  "test_credentials": "owner.inventory@qasirtest.com / OwnerInv#2026",
+  "seed_data_creation": "Supplier 'CV Maju Jaya' (id 6784bd3b-f68e-4cfc-9d85-d7dffc4d5b8c), received purchase INV-UI-1-85742 (10 x ZZ UI PO Test @ Rp 2.000 = Rp 20.000), updated ZZ UI PO Test to stok=30 cost_price=1333. Draft purchase INV-UI-DEL-* was created and deleted during the test. Internet expense 'TEST Internet UI' Rp 100.000 was created and deleted during the test.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "All Fase 1 UI flows verified green on commit at 2026-10-08. Key testids present: nav-suppliers, nav-purchases, supplier-add-button, supplier-dialog, supplier-name-input, supplier-phone-input, supplier-address-input, supplier-submit-button, supplier-row-<id>, supplier-edit-<id>, supplier-delete-<id>, purchase-create-button, purchase-dialog, purchase-supplier-select, purchase-supplier-<id>, purchase-invoice-input, purchase-date-input, purchase-item-product-N, purchase-item-qty-N, purchase-item-price-N, purchase-item-row-N, purchase-item-remove-N, purchase-add-item, purchase-notes-input, purchase-total, purchase-submit-button, purchase-row-<id>, purchase-status-<id>, purchase-receive-<id>, purchase-delete-<id>, expense-category-select, expense-amount-input, expense-description-input, expense-submit-button, expense-row-e-<id>, expense-delete-<id>. The Suppliers page lives at /dashboard/suppliers and Purchases at /dashboard/purchases (owner-only); the rest of the owner nav lives at /products, /inventory, /bookkeeping, /reports etc.",
+  "rca of the issue": "Only minor issue: UI toast 'Dihapus' is shown for supplier delete even when the DB did not actually remove the row (FK with purchases). RCA: backend DELETE /api/suppliers forwards to PostgREST and accepts 204 as success without inspecting the number of rows affected. Mitigation: switch to Prefer: return=representation (or Prefer: count=exact) and raise HTTPException(409, 'Supplier masih dipakai di pembelian') when the response contains an empty array / zero count. Alternatively tighten the FK to ON DELETE RESTRICT so PostgREST returns an error."
+}

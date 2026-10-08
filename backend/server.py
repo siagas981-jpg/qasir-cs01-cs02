@@ -185,9 +185,12 @@ async def update_supplier(sid: str, body: SupplierIn, _owner: dict = Depends(req
 @api.delete("/suppliers/{sid}")
 async def delete_supplier(sid: str, _owner: dict = Depends(require_owner)):
     async with client() as c:
-        r = await c.delete("/rest/v1/suppliers", params={"id": f"eq.{sid}"})
+        r = await c.delete("/rest/v1/suppliers", params={"id": f"eq.{sid}"},
+                           headers={"Prefer": "return=representation"})
     if r.status_code not in (200, 204):
         raise HTTPException(400, "Gagal menghapus supplier")
+    if r.status_code == 200 and not r.json():
+        raise HTTPException(404, "Supplier tidak ditemukan atau sudah dihapus")
     return {"ok": True}
 
 
