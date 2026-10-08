@@ -26,10 +26,20 @@ User choices: Supabase project was empty → create all tables (outlets, product
 - Employee management /employees (owner-only): table w/ search + role/outlet filters, add (server /api/employees creates auth user, roles cashier/manager), edit, reset password without email (auth admin), deactivate (is_active; login blocked, checkout RPC ACCOUNT_INACTIVE), delete (auth user + cascade). Owner rows protected. Replaces /staff. Migration: /app/supabase/migration_employees.sql. Optional Edge Functions in /app/supabase/functions/.
 - Testing: iteration_1 — backend 9/9, frontend 12/12; iteration_2 (reset password) — 11/11
 
+## Implemented (2026-06, Inventory feature)
+- Products page: added columns Harga Modal (products.cost_price), Stok Minimum (products.min_stock); kept Stok (products.stock) as current stock.
+- Per-product stock actions (owner): Add Stock (purchase), Reduce Stock (adjustment/return reason), Adjust Stock (set to physical count) — each calls `record_stock_movement(p_product_id,p_type,p_delta,p_notes)` RPC (atomic: locks row, updates stock, logs movement, NEGATIVE_STOCK guard). New product's initial stock is logged as a 'purchase' movement; stock field is read-only in edit mode (change only via actions).
+- Low-stock warning: row highlighted + red "Stok rendah" badge when stock <= min_stock.
+- New table `public.stock_movements` (id, product_id FK, type[sale|purchase|adjustment|return], quantity signed, previous_stock, new_stock, notes, created_by FK->profiles, created_at) + RLS (same visibility as products) + grants. FK created_by->profiles enables PostgREST creator embed.
+- Sale auto-logging: trigger `on_transaction_item_sale` on transaction_items deducts stock and logs a 'sale' movement. checkout() recreated WITHOUT inline deduction so the trigger is the single source (no double-decrement).
+- New page `/inventory` (owner-only, nav "Inventaris"): stock movement history with filters by product and type; green/red change indicators; shows creator.
+- DB migration: `/app/supabase/migration_inventory.sql` (authoritative, idempotent, self-healing: drops stale function/trigger overloads, adds grants + FK). Applied directly via pooler connection (SQL Editor runs weren't taking effect). schema.sql kept in sync.
+- Testing: iteration_4 — Products inventory flows 9/9; iteration_5 — Inventory page + filters 100%. Test owner account: owner.inventory@qasirtest.com (see test_credentials.md). Test-generated data cleaned up; real products/data untouched.
+
 ## Backlog
 - P1: Receipt print / share, daily sales report per outlet
-- P1: Stock adjustment log (restock history)
-- P2: QRIS/card payment method column, dark mode, deactivate cashier
+- P2: QRIS/card payment method column, dark mode
+- Done: Stock adjustment log / restock history (Inventory feature, 2026-06)
 
 ## Next tasks
 - Disable public signups in Supabase Auth settings (recommended)

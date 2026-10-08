@@ -1,0 +1,20 @@
+{
+  "summary": "Retested /inventory page after Supabase FK fix (stock_movements -> profiles). Table now loads with 3 movement rows for Air Mineral 600ml (Penyesuaian +10, Penyesuaian -2, Pembelian +5). All required columns render: Waktu, Produk, Jenis, Perubahan, Stok (prev -> new), Catatan, Oleh (Owner Test). Positive qty rendered green (text-emerald-600), negative red (text-rose-600). Product filter narrows list correctly (Air Mineral 600ml -> 3 rows). Type filter 'Pembelian' narrows to 1 Pembelian row. Reset to 'Semua produk' + 'Semua jenis' restores full list (confirmed via final screenshot). No console errors; no 4xx on stock_movements requests. PGRST200 bug is resolved.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a", "frontend": "100%"},
+  "test_credentials": "owner.inventory@qasirtest.com / OwnerInv#2026",
+  "seed_data_creation": "None - read-only verification of existing movements from iteration_4.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Inventory page listing + filters + green/red rendering + creator join all working. 3 stock movements exist for Air Mineral 600ml: Penyesuaian +10 (102->112), Penyesuaian -2 (104->102), Pembelian +5 (99->104), all by 'Owner Test'. FK stock_movements_created_by_profiles_fkey works via PostgREST.",
+  "rca of the issue": "Previous PGRST200 caused by missing FK between stock_movements.created_by and public.profiles. Fix added the FK + updated select hint to creator:profiles!stock_movements_created_by_profiles_fkey(full_name,email). Verified: REST returns 200, UI renders creator name correctly."
+}
