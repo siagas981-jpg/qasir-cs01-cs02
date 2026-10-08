@@ -74,7 +74,7 @@ function StockReport({ outletId }) {
 }
 
 function SalesReport({ outletId }) {
-  const range = useDateRange("month");
+  const range = useDateRange("all");
   const [q, setQ] = useState("");
   const { data = [], isLoading } = useQuery({
     queryKey: ["rpt-sales", outletId, range.from, range.to],
@@ -143,7 +143,7 @@ function SalesReport({ outletId }) {
 }
 
 function PurchaseReport({ outletId }) {
-  const range = useDateRange("month");
+  const range = useDateRange("all");
   const [q, setQ] = useState("");
   const { data = [], isLoading } = useQuery({
     queryKey: ["rpt-purchases", outletId, range.from, range.to],

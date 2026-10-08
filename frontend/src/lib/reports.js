@@ -4,10 +4,11 @@ import {
   startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth, subMonths, format,
 } from "date-fns";
 
-export const PERIOD_LABELS = { today: "Harian", week: "Mingguan", month: "Bulanan", custom: "Kustom" };
+export const PERIOD_LABELS = { all: "Semua", today: "Harian", week: "Mingguan", month: "Bulanan", custom: "Kustom" };
 
 export function presetRange(preset) {
   const now = new Date();
+  if (preset === "all") return { from: new Date("2020-01-01T00:00:00"), to: endOfDay(now) };
   if (preset === "today") return { from: startOfDay(now), to: endOfDay(now) };
   if (preset === "week") return { from: startOfWeek(now, { weekStartsOn: 1 }), to: endOfWeek(now, { weekStartsOn: 1 }) };
   return { from: startOfMonth(now), to: endOfMonth(now) };

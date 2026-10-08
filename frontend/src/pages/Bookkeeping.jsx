@@ -19,7 +19,7 @@ import { exportExcel, exportPDF } from "@/lib/exporters";
 import { PageHeader, RangeBar, ExportButtons, StatCard, TableShell, shortId, formatShort } from "@/components/reports/parts";
 
 function IncomeTab({ outletId }) {
-  const range = useDateRange("month");
+  const range = useDateRange("all");
   const { data = [], isLoading } = useQuery({
     queryKey: ["bk-income", outletId, range.from, range.to],
     queryFn: () => fetchSales(outletId, range.from, range.to), enabled: !!outletId,
@@ -84,7 +84,7 @@ function ExpenseForm({ outletId, userId, onDone }) {
 }
 
 function ExpenseTab({ outletId, userId }) {
-  const range = useDateRange("month");
+  const range = useDateRange("all");
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const { data: purchases = [] } = useQuery({ queryKey: ["bk-purch", outletId, range.from, range.to], queryFn: () => fetchPurchases(outletId, range.from, range.to), enabled: !!outletId });
@@ -151,7 +151,7 @@ function ExpenseTab({ outletId, userId }) {
 }
 
 function ProfitTab({ outletId }) {
-  const range = useDateRange("month");
+  const range = useDateRange("all");
   const { data: sum, isLoading } = useQuery({ queryKey: ["bk-profit", outletId, range.from, range.to], queryFn: () => fetchProfitSummary(outletId, range.from, range.to), enabled: !!outletId });
   const { data: series = [] } = useQuery({ queryKey: ["bk-profit-series", outletId], queryFn: () => fetchProfitSeries(outletId, 6), enabled: !!outletId });
   const s = sum || { pemasukan: 0, hpp: 0, pengeluaran: 0, laba: 0 };
