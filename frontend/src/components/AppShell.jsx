@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { NavLink, Outlet } from "react-router-dom";
-import { LogOut, Store, Users, Boxes, BarChart3, BookOpen } from "lucide-react";
+import { LogOut, Store, Users, Boxes, BarChart3, BookOpen, Truck, ShoppingCart } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
 import { useConnection } from "@/hooks/useConnection";
@@ -13,6 +13,8 @@ const NAV = [
   { to: "/transactions", label: "Transaksi", id: "nav-transactions" },
   { to: "/products", label: "Produk", id: "nav-products", owner: true },
   { to: "/inventory", label: "Inventaris", id: "nav-inventory", owner: true, icon: Boxes },
+  { to: "/dashboard/suppliers", label: "Supplier", id: "nav-suppliers", owner: true, icon: Truck },
+  { to: "/dashboard/purchases", label: "Pembelian", id: "nav-purchases", owner: true, icon: ShoppingCart },
   { to: "/reports", label: "Laporan", id: "nav-reports", owner: true, icon: BarChart3 },
   { to: "/bookkeeping", label: "Pembukuan", id: "nav-bookkeeping", owner: true, icon: BookOpen },
   { to: "/outlets", label: "Outlet", id: "nav-outlets", owner: true },

@@ -2,7 +2,7 @@ import { supabase } from "@/lib/supabase/client";
 import { startOfMonth, endOfMonth, subMonths, format } from "date-fns";
 import { toISO, toDateStr } from "@/lib/reports";
 
-export const EXPENSE_CATEGORIES = ["Sewa", "Gaji", "Listrik & Air", "Operasional", "Pemasaran", "Lainnya"];
+export const EXPENSE_CATEGORIES = ["Sewa", "Gaji", "Listrik", "Air", "Internet", "Bahan Baku", "Transport", "Lainnya"];
 
 export async function fetchExpenses(outletId, from, to) {
   const { data, error } = await supabase

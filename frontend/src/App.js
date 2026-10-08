@@ -11,6 +11,8 @@ import Products from "@/pages/Products";
 import Inventory from "@/pages/Inventory";
 import Reports from "@/pages/Reports";
 import Bookkeeping from "@/pages/Bookkeeping";
+import Suppliers from "@/pages/Suppliers";
+import Purchases from "@/pages/Purchases";
 import Outlets from "@/pages/Outlets";
 import Employees from "@/pages/Employees";
 
@@ -32,6 +34,8 @@ function App() {
             <Route path="inventory" element={<Owner><Inventory /></Owner>} />
             <Route path="reports" element={<Owner><Reports /></Owner>} />
             <Route path="bookkeeping" element={<Owner><Bookkeeping /></Owner>} />
+            <Route path="dashboard/suppliers" element={<Owner><Suppliers /></Owner>} />
+            <Route path="dashboard/purchases" element={<Owner><Purchases /></Owner>} />
             <Route path="outlets" element={<Owner><Outlets /></Owner>} />
             <Route path="employees" element={<Owner><Employees /></Owner>} />
           </Route>
