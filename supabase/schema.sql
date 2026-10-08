@@ -228,3 +228,94 @@ revoke all on function public.my_outlet_id() from anon;
 
 -- ───────────── Manual owner seeding (if you create the owner in Auth dashboard) ─────────────
 -- update public.profiles set role = 'owner', outlet_id = null where email = 'you@example.com';
+
+-- ═══════════════════ Inventory / Stock Movements ═══════════════════
+-- (Mirrors supabase/migration_inventory.sql — idempotent, safe to re-run.)
+
+alter table public.products add column if not exists min_stock  integer not null default 0;
+alter table public.products add column if not exists cost_price bigint  not null default 0;
+
+create table if not exists public.stock_movements (
+  id             uuid primary key default gen_random_uuid(),
+  product_id     uuid not null references public.products(id) on delete cascade,
+  type           text not null check (type in ('sale','purchase','adjustment','return')),
+  quantity       integer not null,
+  previous_stock integer not null,
+  new_stock      integer not null,
+  notes          text,
+  created_by     uuid references public.profiles(id) on delete set null,
+  created_at     timestamptz not null default now()
+);
+create index if not exists stock_movements_product_idx on public.stock_movements(product_id, created_at desc);
+create index if not exists stock_movements_type_idx    on public.stock_movements(type);
+
+alter table public.stock_movements enable row level security;
+drop policy if exists stock_movements_select on public.stock_movements;
+create policy stock_movements_select on public.stock_movements for select to authenticated
+  using (exists (
+    select 1 from public.products p
+    where p.id = product_id and (public.is_owner() or p.outlet_id = public.my_outlet_id())
+  ));
+drop policy if exists stock_movements_owner_write on public.stock_movements;
+create policy stock_movements_owner_write on public.stock_movements for all to authenticated
+  using (public.is_owner()) with check (public.is_owner());
+
+create or replace function public.record_stock_movement(
+  p_product_id uuid, p_type text, p_delta integer, p_notes text default null
+) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  v_uid  uuid := auth.uid();
+  v_prod record;
+  v_prev integer;
+  v_new  integer;
+begin
+  if v_uid is null then raise exception 'NOT_AUTHENTICATED' using errcode = '28000'; end if;
+  if p_type not in ('sale','purchase','adjustment','return') then
+    raise exception 'INVALID_TYPE' using errcode = 'P0001';
+  end if;
+  if p_delta is null or p_delta = 0 then
+    raise exception 'ZERO_DELTA' using errcode = 'P0001';
+  end if;
+  select id, stock, outlet_id into v_prod from public.products where id = p_product_id for update;
+  if not found then raise exception 'PRODUCT_NOT_FOUND' using errcode = 'P0001'; end if;
+  if not (public.is_owner() or v_prod.outlet_id = public.my_outlet_id()) then
+    raise exception 'FORBIDDEN' using errcode = '42501';
+  end if;
+  v_prev := v_prod.stock;
+  v_new  := v_prev + p_delta;
+  if v_new < 0 then raise exception 'NEGATIVE_STOCK' using errcode = 'P0001'; end if;
+  update public.products set stock = v_new where id = p_product_id;
+  insert into public.stock_movements(product_id, type, quantity, previous_stock, new_stock, notes, created_by)
+    values (p_product_id, p_type, p_delta, v_prev, v_new, p_notes, v_uid);
+  return jsonb_build_object('product_id', p_product_id, 'previous_stock', v_prev,
+                            'new_stock', v_new, 'type', p_type);
+end $$;
+revoke all on function public.record_stock_movement(uuid, text, integer, text) from public, anon;
+grant execute on function public.record_stock_movement(uuid, text, integer, text) to authenticated;
+
+create or replace function public.tg_transaction_item_sale() returns trigger
+language plpgsql security definer set search_path = public as $$
+declare
+  v_prev integer;
+  v_new  integer;
+begin
+  select stock into v_prev from public.products where id = NEW.product_id for update;
+  if v_prev is null then return NEW; end if;
+  v_new := v_prev - NEW.qty;
+  update public.products set stock = v_new where id = NEW.product_id;
+  insert into public.stock_movements(product_id, type, quantity, previous_stock, new_stock, notes, created_by)
+    values (NEW.product_id, 'sale', -NEW.qty, v_prev, v_new,
+            'Penjualan #' || left(NEW.transaction_id::text, 8), auth.uid());
+  return NEW;
+end $$;
+
+drop trigger if exists on_transaction_item_sale on public.transaction_items;
+create trigger on_transaction_item_sale after insert on public.transaction_items
+  for each row execute function public.tg_transaction_item_sale();
+
+-- NOTE: with the sale trigger above owning stock deduction, the checkout() function must
+-- NOT also deduct inline (that would double-decrement). The canonical checkout() defined
+-- earlier still contains an inline `update products set stock = ...`. If you run this whole
+-- file fresh, run supabase/migration_inventory.sql afterwards (it recreates checkout()
+-- without the inline deduction). For existing projects, just run migration_inventory.sql.
