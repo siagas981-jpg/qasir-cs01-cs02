@@ -23,7 +23,7 @@ export default function Inventory() {
     enabled: !!activeOutletId,
   });
 
-  const { data: rows = [], isLoading } = useQuery({
+  const { data: rows = [], isLoading, error } = useQuery({
     queryKey: ["movements", activeOutletId, productId, type],
     queryFn: () => fetchMovements({
       outletId: activeOutletId,
@@ -82,7 +82,12 @@ export default function Inventory() {
           </thead>
           <tbody>
             {isLoading && <tr><td className="p-4 text-muted-foreground" colSpan={7}>Memuat…</td></tr>}
-            {!isLoading && rows.length === 0 && (
+            {!isLoading && error && (
+              <tr><td className="p-8 text-center text-rose-600" colSpan={7} data-testid="inventory-error">
+                Gagal memuat riwayat stok: {error.message}
+              </td></tr>
+            )}
+            {!isLoading && !error && rows.length === 0 && (
               <tr><td className="p-8 text-center text-muted-foreground" colSpan={7}>
                 <PackageSearch className="h-6 w-6 mx-auto mb-2 opacity-50" />
                 Belum ada pergerakan stok.

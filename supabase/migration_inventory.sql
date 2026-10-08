@@ -22,7 +22,13 @@ create table if not exists public.stock_movements (
 create index if not exists stock_movements_product_idx on public.stock_movements(product_id, created_at desc);
 create index if not exists stock_movements_type_idx    on public.stock_movements(type);
 
--- 3) GRANTS — Supabase roles need table privileges in addition to RLS policies.
+-- FK to profiles so PostgREST can embed the creator (idempotent; NOT VALID skips legacy-row checks).
+-- Applied via ALTER because the table may already exist from an earlier run (create-if-not-exists is a no-op then).
+alter table public.stock_movements drop constraint if exists stock_movements_created_by_profiles_fkey;
+alter table public.stock_movements
+  add constraint stock_movements_created_by_profiles_fkey
+  foreign key (created_by) references public.profiles(id) on delete set null not valid;
+
 grant usage on schema public to authenticated, anon, service_role;
 grant select on public.stock_movements to authenticated;
 grant select, insert, update, delete on public.stock_movements to service_role;

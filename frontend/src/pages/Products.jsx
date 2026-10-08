@@ -43,7 +43,7 @@ function ProductForm({ initial, onSave, busy }) {
 }
 
 const STOCK_MODE = {
-  add: { title: "Tambah Stok", desc: "Catat stok masuk (pembelian/restок).", type: "purchase" },
+  add: { title: "Tambah Stok", desc: "Catat stok masuk (pembelian/restok).", type: "purchase" },
   reduce: { title: "Kurangi Stok", desc: "Catat stok keluar." },
   adjust: { title: "Sesuaikan Stok", desc: "Setel stok ke hasil hitung fisik.", type: "adjustment" },
 };

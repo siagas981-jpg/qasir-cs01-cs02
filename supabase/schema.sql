@@ -249,6 +249,11 @@ create table if not exists public.stock_movements (
 create index if not exists stock_movements_product_idx on public.stock_movements(product_id, created_at desc);
 create index if not exists stock_movements_type_idx    on public.stock_movements(type);
 
+alter table public.stock_movements drop constraint if exists stock_movements_created_by_profiles_fkey;
+alter table public.stock_movements
+  add constraint stock_movements_created_by_profiles_fkey
+  foreign key (created_by) references public.profiles(id) on delete set null not valid;
+
 alter table public.stock_movements enable row level security;
 drop policy if exists stock_movements_select on public.stock_movements;
 create policy stock_movements_select on public.stock_movements for select to authenticated

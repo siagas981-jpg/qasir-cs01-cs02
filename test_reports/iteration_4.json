@@ -1,0 +1,55 @@
+{
+  "summary": "Frontend-only E2E of new INVENTORY feature (Products page + /inventory). Login as owner.inventory@qasirtest.com succeeded. Products table columns Modal/Harga/Stok Min/Stok/Aksi Stok all present. Low-stock badge + rose row highlight for 'Pisang Goreng (Stok Tipis)' verified. Add Stock, Reduce Stock, Adjust Stock flows all functioned end-to-end via supabase.rpc('record_stock_movement') and reflected updated stock in the table with correct 'Stok diperbarui' toasts. Negative-stock guard returned the exact 'Stok tidak boleh negatif' toast and left stock unchanged. Create product with initial Stok Saat Ini = 8 appeared with Stok=8 and the Stok Saat Ini input is correctly DISABLED in edit mode. CRITICAL BUG FOUND on /inventory: fetchMovements() returns 400 from Supabase REST — PGRST200 'Could not find a relationship between stock_movements and profiles in the schema cache'. The Inventory table never leaves the 'Memuat…' state and shows 0 rows, so product/type filtering cannot be validated. Cleanup: created test product (TEST_InvProduct_X9_edited) was DELETED via product-delete-<id>; all 7 pre-existing products remain intact (verified).",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "GET /rest/v1/stock_movements (Supabase, select with creator:profiles(...) join)", "issue": "400 PGRST200 — PostgREST cannot find FK relationship between public.stock_movements and public.profiles. stock_movements.created_by presumably references auth.users(id), not public.profiles(id), so the embedded resource 'creator:profiles(full_name,email)' in fetchMovements fails for ALL queries. Inventory page therefore shows 0 movements and remains stuck in loading. Fix: either (a) add an FK constraint in migration_inventory.sql: ALTER TABLE public.stock_movements ADD CONSTRAINT stock_movements_created_by_profiles_fkey FOREIGN KEY (created_by) REFERENCES public.profiles(id); then use creator:profiles!stock_movements_created_by_profiles_fkey(full_name,email), OR (b) change the join hint to the existing FK, e.g. creator:profiles!created_by(full_name,email) once such FK exists, OR (c) drop the join and fetch creators in a second query keyed by created_by.", "priority": "CRITICAL"}
+    ],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Inventory table loading state", "issue": "On fetchMovements error the UI stays in 'Memuat…' forever (useQuery sets isLoading=false on error, but there is no error branch rendering — reality shows blank/loading because the query error isn't surfaced). Add an error state row with retry.", "selector": "[data-testid=\"inventory-table\"]", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [
+      {"flow": "Inventory page listing & filters", "issue": "Entire flow blocked by the Supabase 400 above. Could not validate inventory-filter-product, inventory-filter-type, positive-green / negative-red rendering, or that purchase/adjustment/sale rows show up.", "affected_selectors": ["[data-testid=\"inventory-table\"]", "[data-testid=\"inventory-filter-product\"]", "[data-testid=\"inventory-filter-type\"]"]}
+    ],
+    "design_issues": []
+  },
+  "tests_executed": {
+    "owner_login_ok": true,
+    "products_table_new_columns": true,
+    "low_stock_badge_and_rose_row": true,
+    "add_stock_flow_increases_stock_and_toast": true,
+    "reduce_stock_flow_decreases_stock_with_reason_select": true,
+    "adjust_stock_flow_sets_absolute_value_prefilled": true,
+    "negative_stock_guard_shows_correct_toast": true,
+    "create_product_with_initial_stock_8": true,
+    "edit_product_stock_input_disabled": true,
+    "inventory_page_loads": "BLOCKED - 400 on fetchMovements",
+    "inventory_filters_product_and_type": "BLOCKED",
+    "inventory_positive_green_negative_red": "BLOCKED",
+    "cleanup_test_products_deleted": true,
+    "preexisting_products_untouched": true
+  },
+  "test_report_links": [],
+  "action_items": [
+    "CRITICAL: Fix the stock_movements<->profiles embed. Add FK constraint from stock_movements.created_by to public.profiles(id) in supabase/migration_inventory.sql and either use the FK-hint syntax (creator:profiles!<fk_name>(...)) OR update the select to use foreign-table disambiguation. Verify via REST: GET /rest/v1/stock_movements?select=*,creator:profiles(full_name,email) returns 200.",
+    "Add an error-state render to Inventory.jsx so a Supabase error no longer looks like a perpetual 'Memuat…'.",
+    "After fix, re-run inventory filter + green/red color validation."
+  ],
+  "critical_code_review_comments": [
+    "lib/inventory.js fetchMovements: creator:profiles(full_name,email) will always 400 unless an explicit FK from stock_movements.created_by -> profiles(id) exists. Supabase/PostgREST does not auto-infer joins through auth.users. Current PGRST200 error confirms no such FK is in the public schema cache.",
+    "Inventory.jsx uses `isLoading` only; it ignores the `error` field from useQuery, so query failures are invisible to the user. Add { error } and render a retry/empty error row.",
+    "Products.jsx del() uses window.confirm instead of AlertDialog; inconsistent with rest of app and not testable via data-testid.",
+    "StockForm 'adjust' mode allows setting stock to 0 but the only guard is `delta === 0` toast; consider explicit confirmation when setting a large positive delta (potential typos).",
+    "STOCK_MODE.add.desc contains a cyrillic character ('restок') — minor typo."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (frontend-only run)", "frontend": "~70% (9/13 scenarios passed; 3 blocked by Supabase join bug; 1 UI loading-state issue)"},
+  "test_credentials": "owner.inventory@qasirtest.com / OwnerInv#2026",
+  "seed_data_creation": "Created TEST_InvProduct_X9 (initial stock 8), renamed to TEST_InvProduct_X9_edited, then DELETED via UI. Stock changes made to pre-existing 'Air Mineral 600ml' were intentionally left (per instructions).",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Re-run inventory_page tests after main agent adds FK from stock_movements.created_by -> public.profiles(id) and updates fetchMovements select hint. Pre-existing product list is intact (7 products). 'Air Mineral 600ml' stock was adjusted during this run.",
+  "rca of the issue": "ROOT CAUSE: supabase/migration_inventory.sql created stock_movements.created_by as a UUID (likely referencing auth.users(id)) but did NOT add a foreign key to public.profiles(id). PostgREST's embedded-resource syntax creator:profiles(...) requires an FK in the exposed schema to disambiguate the join; without it PostgREST returns PGRST200. REPRO: login as owner.inventory@qasirtest.com, open /inventory — Network tab shows GET /rest/v1/stock_movements?...creator:profiles(...) -> 400 {code: PGRST200}. MITIGATION: Add in migration: ALTER TABLE public.stock_movements ADD CONSTRAINT stock_movements_created_by_profiles_fkey FOREIGN KEY (created_by) REFERENCES public.profiles(id) ON DELETE SET NULL; then adjust select to creator:profiles!stock_movements_created_by_profiles_fkey(full_name,email) (or keep implicit if only one FK path). Reload PostgREST schema cache (NOTIFY pgrst, 'reload schema';)."
+}

@@ -27,7 +27,7 @@ export async function fetchMovements({ outletId, productId, type }) {
   let q = supabase
     .from("stock_movements")
     .select(
-      "id,type,quantity,previous_stock,new_stock,notes,created_at,created_by,product_id,products!inner(name,outlet_id),creator:profiles(full_name,email)",
+      "id,type,quantity,previous_stock,new_stock,notes,created_at,created_by,product_id,products!inner(name,outlet_id),creator:profiles!stock_movements_created_by_profiles_fkey(full_name,email)",
     )
     .eq("products.outlet_id", outletId)
     .order("created_at", { ascending: false })
