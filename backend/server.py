@@ -1,89 +1,144 @@
-from fastapi import FastAPI, APIRouter
-from dotenv import load_dotenv
-from starlette.middleware.cors import CORSMiddleware
-from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import logging
 from pathlib import Path
-from pydantic import BaseModel, Field, ConfigDict
-from typing import List
-import uuid
-from datetime import datetime, timezone
+from typing import Optional
 
+from dotenv import load_dotenv
 
 ROOT_DIR = Path(__file__).parent
-load_dotenv(ROOT_DIR / '.env')
+load_dotenv(ROOT_DIR / ".env")
 
-# MongoDB connection
-mongo_url = os.environ['MONGO_URL']
-client = AsyncIOMotorClient(mongo_url)
-db = client[os.environ['DB_NAME']]
+from fastapi import FastAPI, APIRouter, Depends, HTTPException, Header  # noqa: E402
+from pydantic import BaseModel, Field  # noqa: E402
+from starlette.middleware.cors import CORSMiddleware  # noqa: E402
 
-# Create the main app without a prefix
+from supabase_admin import client  # noqa: E402
+
+logger = logging.getLogger("qasir")
+logging.basicConfig(level=logging.INFO)
+
 app = FastAPI()
-
-# Create a router with the /api prefix
-api_router = APIRouter(prefix="/api")
+api = APIRouter(prefix="/api")
 
 
-# Define Models
-class StatusCheck(BaseModel):
-    model_config = ConfigDict(extra="ignore")  # Ignore MongoDB's _id field
-    
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    client_name: str
-    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+async def current_user(authorization: Optional[str] = Header(None)) -> dict:
+    if not authorization or not authorization.lower().startswith("bearer "):
+        raise HTTPException(401, "Missing access token")
+    token = authorization.split(" ", 1)[1]
+    async with client() as c:
+        r = await c.get("/auth/v1/user", headers={"Authorization": f"Bearer {token}"})
+        if r.status_code != 200:
+            raise HTTPException(401, "Invalid or expired access token")
+        user = r.json()
+        p = await c.get("/rest/v1/profiles", params={"id": f"eq.{user['id']}", "select": "role,outlet_id"})
+    rows = p.json() if p.status_code == 200 else []
+    user["profile"] = rows[0] if rows else None
+    return user
 
-class StatusCheckCreate(BaseModel):
-    client_name: str
 
-# Add your routes to the router instead of directly to app
-@api_router.get("/")
+async def require_owner(user: dict = Depends(current_user)) -> dict:
+    if not user["profile"] or user["profile"]["role"] != "owner":
+        raise HTTPException(403, "Owner role required")
+    return user
+
+
+async def _target_role(c, uid: str) -> Optional[str]:
+    p = await c.get("/rest/v1/profiles", params={"id": f"eq.{uid}", "select": "role"})
+    rows = p.json() if p.status_code == 200 else []
+    return rows[0]["role"] if rows else None
+
+
+class NewEmployee(BaseModel):
+    email: str = Field(min_length=3)
+    password: str = Field(min_length=6)
+    full_name: Optional[str] = None
+    role: str = "cashier"
+    outlet_id: str
+
+
+class NewPassword(BaseModel):
+    password: str = Field(min_length=6)
+
+
+@api.get("/")
 async def root():
-    return {"message": "Hello World"}
+    return {"message": "CS Qasir API"}
 
-@api_router.post("/status", response_model=StatusCheck)
-async def create_status_check(input: StatusCheckCreate):
-    status_dict = input.model_dump()
-    status_obj = StatusCheck(**status_dict)
-    
-    # Convert to dict and serialize datetime to ISO string for MongoDB
-    doc = status_obj.model_dump()
-    doc['timestamp'] = doc['timestamp'].isoformat()
-    
-    _ = await db.status_checks.insert_one(doc)
-    return status_obj
 
-@api_router.get("/status", response_model=List[StatusCheck])
-async def get_status_checks():
-    # Exclude MongoDB's _id field from the query results
-    status_checks = await db.status_checks.find({}, {"_id": 0}).to_list(1000)
-    
-    # Convert ISO string timestamps back to datetime objects
-    for check in status_checks:
-        if isinstance(check['timestamp'], str):
-            check['timestamp'] = datetime.fromisoformat(check['timestamp'])
-    
-    return status_checks
+@api.get("/health")
+async def health():
+    async with client() as c:
+        r = await c.get("/rest/v1/outlets", params={"select": "id", "limit": "1"})
+    ok = r.status_code == 200
+    return {"supabase": "ok" if ok else "error", "status_code": r.status_code}
 
-# Include the router in the main app
-app.include_router(api_router)
 
+@api.post("/employees", status_code=201)
+async def create_employee(body: NewEmployee, _owner: dict = Depends(require_owner)):
+    if body.role not in ("cashier", "manager"):
+        raise HTTPException(400, "Role harus cashier atau manager")
+    if "@" not in body.email or "." not in body.email.split("@")[-1]:
+        raise HTTPException(400, "Email tidak valid")
+    email = body.email.strip().lower()
+    async with client() as c:
+        o = await c.get("/rest/v1/outlets", params={"id": f"eq.{body.outlet_id}", "select": "id"})
+        if o.status_code != 200 or not o.json():
+            raise HTTPException(400, "Outlet not found")
+        r = await c.post("/auth/v1/admin/users", json={
+            "email": email,
+            "password": body.password,
+            "email_confirm": True,
+            "user_metadata": {"full_name": body.full_name} if body.full_name else {},
+        })
+        if r.status_code not in (200, 201):
+            msg = r.json().get("msg") or r.json().get("message") or "Could not create user"
+            raise HTTPException(400, msg)
+        uid = r.json()["id"]
+        u = await c.patch(
+            "/rest/v1/profiles",
+            params={"id": f"eq.{uid}"},
+            json={"role": body.role, "outlet_id": body.outlet_id, "full_name": body.full_name, "is_active": True},
+            headers={"Prefer": "return=representation"},
+        )
+        if u.status_code != 200 or not u.json():
+            await c.delete(f"/auth/v1/admin/users/{uid}")
+            raise HTTPException(500, "Profile assignment failed; user creation rolled back")
+    return u.json()[0]
+
+
+@api.post("/employees/{uid}/password")
+async def reset_employee_password(uid: str, body: NewPassword, owner: dict = Depends(require_owner)):
+    if uid == owner["id"]:
+        raise HTTPException(400, "Gunakan halaman reset password untuk akun sendiri")
+    async with client() as c:
+        if await _target_role(c, uid) in ("owner", "admin"):
+            raise HTTPException(400, "Tidak bisa mengubah akun owner/admin")
+        r = await c.put(f"/auth/v1/admin/users/{uid}", json={"password": body.password})
+        if r.status_code != 200:
+            logger.warning("admin updateUserById failed: %s %s", r.status_code, r.text)
+            raise HTTPException(400, "Gagal mengatur ulang password")
+    return {"ok": True}
+
+
+@api.delete("/employees/{uid}")
+async def delete_employee(uid: str, owner: dict = Depends(require_owner)):
+    if uid == owner["id"]:
+        raise HTTPException(400, "Tidak bisa menghapus akun sendiri")
+    async with client() as c:
+        if await _target_role(c, uid) in ("owner", "admin"):
+            raise HTTPException(400, "Tidak bisa menghapus akun owner/admin")
+        r = await c.delete(f"/auth/v1/admin/users/{uid}")
+        if r.status_code not in (200, 204):
+            logger.warning("admin deleteUser failed: %s %s", r.status_code, r.text)
+            raise HTTPException(400, "Gagal menghapus user")
+    return {"ok": True}
+
+
+app.include_router(api)
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
-    allow_origins=os.environ.get('CORS_ORIGINS', '*').split(','),
+    allow_origins=os.environ.get("CORS_ORIGINS", "*").split(","),
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
-
-@app.on_event("shutdown")
-async def shutdown_db_client():
-    client.close()

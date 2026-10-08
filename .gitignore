@@ -83,3 +83,14 @@ android-sdk/
 
 # overlay black-box crash/user-report dumps — session data, never history
 **/.emergent/recordings/
+
+.env.local
+*.env.local
+frontend/node_modules/.cache/default-development/0.pack
+frontend/node_modules/.cache/default-development/3.pack
+.env
+.env.*
+*.env
+credentials.json
+*.key
+.credentials

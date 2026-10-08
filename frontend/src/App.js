@@ -1,56 +1,39 @@
-import { useEffect } from "react";
 import "@/App.css";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
-import axios from "axios";
-import { HOME } from "@/constants/testIds";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { Toaster } from "@/components/ui/sonner";
+import { AuthProvider } from "@/context/AuthContext";
+import { RouteGuard } from "@/components/RouteGuard";
+import AppShell from "@/components/AppShell";
+import Login from "@/pages/Login";
+import POS from "@/pages/POS";
+import Transactions from "@/pages/Transactions";
+import Products from "@/pages/Products";
+import Outlets from "@/pages/Outlets";
+import Employees from "@/pages/Employees";
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
-const API = `${BACKEND_URL}/api`;
+import ResetPassword from "@/pages/ResetPassword";
 
-const Home = () => {
-  const helloWorldApi = async () => {
-    try {
-      const response = await axios.get(`${API}/`);
-      console.log(response.data.message);
-    } catch (e) {
-      console.error(e, `errored out requesting / api`);
-    }
-  };
-
-  useEffect(() => {
-    helloWorldApi();
-  }, []);
-
-  return (
-    // The marker attribute below lets the platform probe detect the stock splash — remove it with this page
-    <div data-emergent-splash>
-      <header className="App-header">
-        <a
-          data-testid={HOME.emergentLink}
-          className="App-link"
-          href="https://emergent.sh"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <img src="https://avatars.githubusercontent.com/in/1201222?s=120&u=2686cf91179bbafbc7a71bfbc43004cf9ae1acea&v=4" />
-        </a>
-        <p className="mt-5">Building something incredible ~!</p>
-      </header>
-    </div>
-  );
-};
+const Owner = ({ children }) => <RouteGuard ownerOnly>{children}</RouteGuard>;
 
 function App() {
   return (
-    <div className="App">
+    <AuthProvider>
       <BrowserRouter>
         <Routes>
-          <Route path="/" element={<Home />}>
-            <Route index element={<Home />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
+          <Route element={<RouteGuard><AppShell /></RouteGuard>}>
+            <Route index element={<POS />} />
+            <Route path="transactions" element={<Transactions />} />
+            <Route path="products" element={<Owner><Products /></Owner>} />
+            <Route path="outlets" element={<Owner><Outlets /></Owner>} />
+            <Route path="employees" element={<Owner><Employees /></Owner>} />
           </Route>
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>
-    </div>
+      <Toaster position="top-right" richColors />
+    </AuthProvider>
   );
 }
 
