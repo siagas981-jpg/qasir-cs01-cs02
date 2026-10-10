@@ -116,9 +116,8 @@ function MasterManager({ table, label }){
   const [items, setItems] = useState([])
   const [name, setName] = useState("")
   const qc = useQueryClient();
-  useEffect(()=>{
-    const load = async () => { const { data } = await supabase.from(table).select("*").order("created_at", {ascending:false}); setItems(data||[]) }
-    load()
+     useEffect(()=>{
+    const load = async () => { const { data } = await supabase.from(table).select("*").order("created_at", {ascending:false}); setItems(data||[]) }; load()
   }, [table])
 
   const add = async () => {
