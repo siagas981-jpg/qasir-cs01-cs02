@@ -282,62 +282,61 @@ async def delete_purchase(pid: str, _owner: dict = Depends(require_owner)):
         raise HTTPException(400, "Gagal menghapus pembelian")
     return {"ok": True}
 # ───────────── ARCHIVE TRANSAKSI 2 BULANAN KE EXCEL ─────────────
-async def _fetch_old_sales(c, cutoff_iso: str, outlet_id):
+from pydantic import BaseModel
+
+class ArchiveRunBody(BaseModel):
+    start: str
+    end: str
+    label: str = ""
+    outlet_id: Optional[str] = None
+
+async def _fetch_sales_range(c, start_iso: str, end_iso: str, outlet_id):
+    # build url dengan 2 filter created_at
+    base_q = f"select=*&order=created_at.asc&limit=20000&created_at=gte.{start_iso}T00:00:00&created_at=lte.{end_iso}T23:59:59"
+    if outlet_id:
+        base_q += f"&outlet_id=eq.{outlet_id}"
     for table in ["sales", "transactions", "orders"]:
-        params = {"select": "*", "created_at": f"lt.{cutoff_iso}", "order": "created_at.asc", "limit": "10000"}
-        if outlet_id:
-            params["outlet_id"] = f"eq.{outlet_id}"
-        r = await c.get(f"/rest/v1/{table}", params=params)
+        r = await c.get(f"/rest/v1/{table}?{base_q}")
         if r.status_code == 200 and isinstance(r.json(), list):
-            if len(r.json()) > 0 or table == "sales":
+            if len(r.json()) > 0:
                 return table, r.json()
     return "sales", []
 
 @api.get("/archives/preview")
-async def preview_archive(days: int = Query(60, ge=30), outlet_id: Optional[str] = None, _owner: dict = Depends(require_owner)):
-    cutoff = datetime.utcnow() - timedelta(days=days)
-    cutoff_iso = cutoff.isoformat()
+async def preview_archive(start: str = Query(...), end: str = Query(...), outlet_id: Optional[str] = None, _owner: dict = Depends(require_owner)):
     async with client() as c:
-        table, rows = await _fetch_old_sales(c, cutoff_iso, outlet_id)
-    return {"cutoff_date": cutoff_iso, "table_detected": table, "count": len(rows), "sample": rows[:3], "message": f"{len(rows)} transaksi lebih tua dari {days} hari akan diarsip"}
+        table, rows = await _fetch_sales_range(c, start, end, outlet_id)
+    return {"table_detected": table, "count": len(rows), "start": start, "end": end}
 
 @api.post("/archives/run")
-async def run_archive(days: int = Query(60, ge=30), outlet_id: Optional[str] = None, delete_original: bool = Query(False), _owner: dict = Depends(require_owner)):
-    cutoff = datetime.utcnow() - timedelta(days=days)
-    cutoff_iso = cutoff.isoformat()
+async def run_archive(body: ArchiveRunBody, _owner: dict = Depends(require_owner)):
     async with client() as c:
-        table, rows = await _fetch_old_sales(c, cutoff_iso, outlet_id)
+        table, rows = await _fetch_sales_range(c, body.start, body.end, body.outlet_id)
         if not rows:
-            return {"ok": True, "archived": 0, "message": "Tidak ada transaksi lama"}
+            raise HTTPException(404, f"Tidak ada transaksi di periode {body.label}")
         df = pd.DataFrame(rows)
         if "created_at" in df.columns:
-            df["created_at"] = pd.to_datetime(df["created_at"])
+            df["created_at"] = pd.to_datetime(df["created_at"]).dt.tz_localize(None)
         output = io.BytesIO()
         with pd.ExcelWriter(output, engine="openpyxl") as writer:
             df.to_excel(writer, index=False, sheet_name="transaksi")
-            summary = pd.DataFrame([{"periode": f"{df['created_at'].min()} s/d {df['created_at'].max()}" if "created_at" in df.columns else "-", "jumlah": len(df), "tanggal_arsip": datetime.utcnow().isoformat()}])
+            summary = pd.DataFrame([{"periode": body.label, "start": body.start, "end": body.end, "jumlah": len(df), "tanggal_arsip": datetime.utcnow().isoformat()}])
             summary.to_excel(writer, index=False, sheet_name="ringkasan")
         output.seek(0)
-        filename = f"arsip_{table}_{cutoff.strftime('%Y%m%d')}.xlsx"
-        if delete_original:
-            try:
-                for r in rows:
-                    r["archived_at"] = datetime.utcnow().isoformat()
-                await c.post("/rest/v1/archived_sales", json=rows)
-                for _id in [r["id"] for r in rows if "id" in r]:
-                    await c.delete(f"/rest/v1/{table}", params={"id": f"eq.{_id}"})
-            except Exception as e:
-                raise HTTPException(500, f"Export ok tapi gagal pindah: {e}")
-    return StreamingResponse(io.BytesIO(output.getvalue()), media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers={"Content-Disposition": f"attachment; filename={filename}"})
+        filename = f"arsip_{body.label.replace(' ','_')}.xlsx"
+    return StreamingResponse(output, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers={"Content-Disposition": f"attachment; filename={filename}"})
+
+@api.post("/archive/run")
+async def run_archive_alias(body: ArchiveRunBody, _owner: dict = Depends(require_owner)):
+    return await run_archive(body, _owner)
 
 @api.get("/archives/logs")
 async def list_archive_logs(_owner: dict = Depends(require_owner)):
     async with client() as c:
         r = await c.get("/rest/v1/archive_logs", params={"select": "*", "order": "created_at.desc", "limit": "50"})
         if r.status_code!= 200:
-            return {"logs": [], "note": "Buat tabel archive_logs dulu di Supabase"}
+            return {"logs": []}
         return {"logs": r.json()}
-
 
 
 app.include_router(api)
