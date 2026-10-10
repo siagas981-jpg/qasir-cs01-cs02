@@ -157,7 +157,7 @@ export default function Products() {
         if (error) throw error;
       } else {
         const { data: row, error } = await supabase.from("products").insert({
-          name: f.name.trim(), sku: f.sku || null, price: f.price, cost_price: f.cost_price, min_stock: f.min_stock, stock: 0, outlet_id: activeOutletId,
+          name: f.name.trim(), sku: f.sku || null, price: f.price, cost_price: f.cost_price, min_stock: f.min_stock, image_url: f.image_url, sto
         }).select("id").single();
         if (error) throw error;
         if (f.stock > 0) await recordStockMovement({ product_id: row.id, type: "purchase", delta: f.stock, notes: "Stok awal" });
