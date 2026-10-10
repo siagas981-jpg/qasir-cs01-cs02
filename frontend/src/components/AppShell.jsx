@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { NavLink, Outlet } from "react-router-dom";
-import { LogOut, Store, Users, Boxes, BarChart3, BookOpen, Truck, ShoppingCart } from "lucide-react";
+import { LogOut, Store, Users, Boxes, BarChart3, BookOpen, Truck, ShoppingCart, Archive } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
 import { useConnection } from "@/hooks/useConnection";
@@ -19,14 +19,15 @@ const NAV = [
   { to: "/bookkeeping", label: "Pembukuan", id: "nav-bookkeeping", owner: true, icon: BookOpen },
   { to: "/outlets", label: "Outlet", id: "nav-outlets", owner: true },
   { to: "/employees", label: "Kelola Karyawan", id: "nav-employees", owner: true, icon: Users },
+  { to: "/dashboard/arsip", label: "Arsip", id: "nav-archive", owner: true, icon: Archive },
 ];
 
 function StatusBadge({ online, healthy }) {
-  const ok = online && healthy !== false;
+  const ok = online && healthy!== false;
   return (
     <span data-testid="supabase-sync-status-badge" className="inline-flex items-center gap-1.5 text-xs font-medium">
-      <span className={`h-2 w-2 rounded-full ${ok ? "bg-emerald-500" : "bg-rose-500"} ${ok ? "" : "animate-pulse"}`} />
-      <span className="hidden sm:inline">{!online ? "Offline" : healthy === false ? "Supabase error" : "Online"}</span>
+      <span className={`h-2 w-2 rounded-full ${ok? "bg-emerald-500" : "bg-rose-500"} ${ok? "" : "animate-pulse"}`} />
+      <span className="hidden sm:inline">{!online? "Offline" : healthy === false? "Supabase error" : "Online"}</span>
     </span>
   );
 }
@@ -36,7 +37,7 @@ export default function AppShell() {
   const { online, healthy, queue } = useConnection();
 
   useEffect(() => {
-    if (!online || !user) return;
+    if (!online ||!user) return;
     flushQueue(user.id).then((r) => {
       if (r.synced) toast.success(`${r.synced} transaksi offline tersinkron`);
       if (r.failed) toast.error(`${r.failed} transaksi offline ditolak — cek antrean`);
@@ -52,9 +53,9 @@ export default function AppShell() {
             <span className="font-heading text-lg font-extrabold tracking-tight hidden sm:block">CS Qasir</span>
           </div>
           <nav className="flex items-center gap-1 overflow-x-auto no-scrollbar">
-            {NAV.filter((n) => !n.owner || isOwner).map((n) => (
+            {NAV.filter((n) =>!n.owner || isOwner).map((n) => (
               <NavLink key={n.to} to={n.to} end={n.end} data-testid={n.id}
-                className={({ isActive }) => `whitespace-nowrap rounded-md px-3 py-2 text-sm font-semibold transition-colors inline-flex items-center gap-1.5 ${isActive ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"}`}>
+                className={({ isActive }) => `whitespace-nowrap rounded-md px-3 py-2 text-sm font-semibold transition-colors inline-flex items-center gap-1.5 ${isActive? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"}`}>
                 {n.icon && <n.icon className="h-4 w-4" />}{n.label}
               </NavLink>
             ))}
