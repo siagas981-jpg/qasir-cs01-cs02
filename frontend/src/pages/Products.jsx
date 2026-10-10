@@ -58,6 +58,7 @@ function ProductForm({ initial, onSave, busy }) {
         </div>
         <div className="space-y-1.5"><Label>Stok Minimum</Label><Input type="number" min="0" className="font-mono" value={f.min_stock} onChange={(e) => setF({ ...f, min_stock: Math.max(0, parseInt(e.target.value, 10) || 0) })} data-testid="product-form-min-stock-input" /></div>
       </div>
+     <div className="space-y-1.5"><Label>Foto</Label><Input type="file" accept="image/*" onChange={handleImageUpload} />{f.image_url && <img src={f.image_url} className="h-20 w-20 rounded object-cover mt-2" />}</div>
       <Button type="submit" disabled={busy} className="w-full h-11 bg-emerald-600 hover:bg-emerald-700 text-white" data-testid="product-form-submit-button">Simpan</Button>
     </form>
   );
