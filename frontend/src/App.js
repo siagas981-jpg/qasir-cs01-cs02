@@ -1,4 +1,3 @@
-import Archive from "./pages/Archive"
 import "@/App.css";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { Toaster } from "@/components/ui/sonner";
@@ -16,7 +15,7 @@ import Suppliers from "@/pages/Suppliers";
 import Purchases from "@/pages/Purchases";
 import Outlets from "@/pages/Outlets";
 import Employees from "@/pages/Employees";
-
+import Archive from "./pages/Archive";
 import ResetPassword from "@/pages/ResetPassword";
 
 const Owner = ({ children }) => <RouteGuard ownerOnly>{children}</RouteGuard>;
@@ -39,7 +38,7 @@ function App() {
             <Route path="dashboard/purchases" element={<Owner><Purchases /></Owner>} />
             <Route path="outlets" element={<Owner><Outlets /></Owner>} />
             <Route path="employees" element={<Owner><Employees /></Owner>} />
-  <Route path="arsip" element={<Owner><Archive /></Owner>} />
+            <Route path="dashboard/arsip" element={<Owner><Archive /></Owner>} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
