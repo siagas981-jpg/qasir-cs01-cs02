@@ -1,3 +1,4 @@
+import Archive from "./pages/Archive"
 import "@/App.css";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { Toaster } from "@/components/ui/sonner";
@@ -38,6 +39,7 @@ function App() {
             <Route path="dashboard/purchases" element={<Owner><Purchases /></Owner>} />
             <Route path="outlets" element={<Owner><Outlets /></Owner>} />
             <Route path="employees" element={<Owner><Employees /></Owner>} />
+  <Route path="arsip" element={<Owner><Archive /></Owner>} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
