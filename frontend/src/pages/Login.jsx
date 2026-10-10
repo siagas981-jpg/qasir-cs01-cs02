@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Navigate, useLocation, useNavigate } from "react-router-dom";
-import { Loader2, Store } from "lucide-react";
+import { Loader2, Store, Eye, EyeOff } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -16,6 +16,7 @@ export default function Login() {
   const loc = useLocation();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [forgotOpen, setForgotOpen] = useState(false);
@@ -67,7 +68,12 @@ export default function Login() {
               <button type="button" onClick={() => { setForgotMsg(""); setForgotEmail(email); setForgotOpen(true); }}
                 className="text-xs font-semibold text-emerald-700 hover:underline" data-testid="login-forgot-password-link">Lupa password?</button>
             </div>
-            <Input id="password" type="password" required autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} className="h-12 bg-white" data-testid="login-password-input" />
+            <div className="relative">
+              <Input id="password" type={showPassword ? "text" : "password"} required autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} className="h-12 bg-white pr-11" data-testid="login-password-input" />
+              <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700" tabIndex={-1}>
+                {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+              </button>
+            </div>
           </div>
           {error && <p className="text-sm font-medium text-rose-600" data-testid="login-error">{error}</p>}
           <Button type="submit" disabled={busy} className="h-12 w-full bg-emerald-600 hover:bg-emerald-700 text-white text-base font-semibold active:scale-[0.98] transition-transform" data-testid="login-submit-button">
