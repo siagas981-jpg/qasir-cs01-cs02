@@ -20,6 +20,28 @@ function ProductForm({ initial, onSave, busy }) {
   const [f, setF] = useState(initial);
   const isEdit = !!f.id;
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
+  const handleImageUpload = async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  try {
+    toast.loading("Kompres gambar...");
+    const compressed = await imageCompression(file, {
+      maxSizeMB: 0.15,
+      maxWidthOrHeight: 800,
+      useWebWorker: true,
+    });
+    const fileName = `${Date.now()}-${file.name}`;
+    const { error } = await supabase.storage.from('produk').upload(fileName, compressed);
+    if (error) throw error;
+    const { data } = supabase.storage.from('produk').getPublicUrl(fileName);
+    setF({...f, image_url: data.publicUrl });
+    toast.dismiss();
+    toast.success("Foto siap! ~150KB");
+  } catch (err) {
+    toast.dismiss();
+    toast.error(err.message);
+  }
+};
   return (
     <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); onSave(f); }}>
       <div className="space-y-1.5"><Label>Nama</Label><Input required value={f.name} onChange={set("name")} data-testid="product-form-name-input" /></div>
