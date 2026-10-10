@@ -151,9 +151,9 @@ export default function Products() {
     setBusy(true);
     try {
       if (f.id) {
-        const { error } = await supabase.from("products").update({
-          name: f.name.trim(), sku: f.sku || null, price: f.price, cost_price: f.cost_price, min_stock: f.min_stock,
-        }).eq("id", f.id);
+       const { error } = await supabase.from("products").update({
+  name: f.name.trim(), sku: f.sku || null, price: f.price, cost_price: f.cost_price, min_stock: f.min_stock, image_url: f.image_url,
+}).eq("id", f.id);
         if (error) throw error;
       } else {
         const { data: row, error } = await supabase.from("products").insert({
