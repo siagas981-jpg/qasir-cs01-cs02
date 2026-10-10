@@ -208,18 +208,23 @@ export default function Products() {
             <th className="p-4 text-right">Aksi Stok</th><th className="p-4" />
           </tr></thead>
           <tbody>
-            {isLoading && <tr><td className="p-4 text-muted-foreground" colSpan={8}>Memuat…</td></tr>}
+            {isLoading && <tr><td className="p-4 text-muted-foreground" colSpan={9}>Memuat…</td></tr>}
             {data.map((p) => {
               const minStock = p.min_stock ?? 0;
               const low = p.stock <= minStock;
               return (
               <tr key={p.id} className={`border-b last:border-b-0 ${low ? "bg-rose-50/70 hover:bg-rose-50" : "hover:bg-slate-50"}`} data-testid={`product-row-${p.id}`}>
-                     <td className="p-4 font-semibold">
+                          <td className="p-2">
+        <div className="w-12 h-12 rounded bg-slate-100 overflow-hidden flex items-center justify-center border">
+          {p.image_url? <img src={p.image_url} alt={p.name} className="w-full h-full object-cover" /> : <span className="text-[10px] text-slate-400">No</span>}
+        </div>
+      </td>
+      <td className="p-4 font-semibold">
         <div className="flex items-center gap-2">
-          {p.image_url? (
-            <img src={p.image_url} alt={p.name} className="h-10 w-10 rounded object-cover border" />
-          ) : (
-            <div className="h-10 w-10 rounded bg-slate-100 border flex items-center justify-center text-[10px] text-slate-400">No</div>
+          {p.name}
+          {low && <span className="ml-2 text-[10px] bg-rose-100 text-rose-700 px-2 py-0.5 rounded border border-rose-200">Stok rendah</span>}
+        </div>
+      </td>
           )}
           <div>
             {p.name}
