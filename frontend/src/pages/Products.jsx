@@ -232,6 +232,7 @@ export default function Products() {
           </div>
         </div>
       </td>
+                </tr>  
                 <td className="p-4 font-mono text-slate-500">{p.sku}</td>
                 <td className="p-4 text-right font-mono text-slate-500">{rupiah(p.cost_price ?? 0)}</td>
                 <td className="p-4 text-right font-mono">{rupiah(p.price)}</td>
