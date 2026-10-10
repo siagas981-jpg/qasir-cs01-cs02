@@ -15,54 +15,56 @@ import { rupiah, parseRupiah } from "@/lib/format";
 import { fetchProducts } from "@/pages/POS";
 import { recordStockMovement, movementError } from "@/lib/inventory";
 import imageCompression from "browser-image-compression";
+
 const EMPTY = { name: "", sku: "", price: 0, stock: 0, min_stock: 0, cost_price: 0, image_url: "" };
+
 function ProductForm({ initial, onSave, busy }) {
   const [f, setF] = useState(initial);
-  const isEdit = !!f.id;
-  const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
+  const isEdit =!!f.id;
+  const set = (k) => (e) => setF({...f, [k]: e.target.value });
   const handleImageUpload = async (e) => {
-  const file = e.target.files[0];
-  if (!file) return;
-  try {
-    toast.loading("Kompres gambar...");
-    const compressed = await imageCompression(file, {
-      maxSizeMB: 0.15,
-      maxWidthOrHeight: 800,
-      useWebWorker: true,
-    });
-    const fileName = `${Date.now()}-${file.name}`;
-    const { error } = await supabase.storage.from('produk').upload(fileName, compressed);
-    if (error) throw error;
-    const { data } = supabase.storage.from('produk').getPublicUrl(fileName);
-    setF({...f, image_url: data.publicUrl });
-    toast.dismiss();
-    toast.success("Foto siap! ~150KB");
-  } catch (err) {
-    toast.dismiss();
-    toast.error(err.message);
-  }
-};
+    const file = e.target.files[0];
+    if (!file) return;
+    try {
+      toast.loading("Kompres gambar...");
+      const compressed = await imageCompression(file, {
+        maxSizeMB: 0.15,
+        maxWidthOrHeight: 800,
+        useWebWorker: true,
+      });
+      const fileName = `${Date.now()}-${file.name}`;
+      const { error } = await supabase.storage.from('produk').upload(fileName, compressed);
+      if (error) throw error;
+      const { data } = supabase.storage.from('produk').getPublicUrl(fileName);
+      setF({...f, image_url: data.publicUrl });
+      toast.dismiss();
+      toast.success("Foto siap! ~150KB");
+    } catch (err) {
+      toast.dismiss();
+      toast.error(err.message);
+    }
+  };
   return (
     <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); onSave(f); }}>
       <div className="space-y-1.5"><Label>Nama</Label><Input required value={f.name} onChange={set("name")} data-testid="product-form-name-input" /></div>
       <div className="space-y-1.5"><Label>SKU</Label><Input value={f.sku || ""} onChange={set("sku")} data-testid="product-form-sku-input" /></div>
       <div className="grid grid-cols-2 gap-3">
-        <div className="space-y-1.5"><Label>Harga Jual</Label><Input inputMode="numeric" className="font-mono" value={rupiah(f.price)} onChange={(e) => setF({ ...f, price: parseRupiah(e.target.value) })} data-testid="product-form-price-input" /></div>
-        <div className="space-y-1.5"><Label>Harga Modal</Label><Input inputMode="numeric" className="font-mono" value={rupiah(f.cost_price)} onChange={(e) => setF({ ...f, cost_price: parseRupiah(e.target.value) })} data-testid="product-form-cost-input" /></div>
+        <div className="space-y-1.5"><Label>Harga Jual</Label><Input inputMode="numeric" className="font-mono" value={rupiah(f.price)} onChange={(e) => setF({...f, price: parseRupiah(e.target.value) })} data-testid="product-form-price-input" /></div>
+        <div className="space-y-1.5"><Label>Harga Modal</Label><Input inputMode="numeric" className="font-mono" value={rupiah(f.cost_price)} onChange={(e) => setF({...f, cost_price: parseRupiah(e.target.value) })} data-testid="product-form-cost-input" /></div>
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1.5">
           <Label>Stok Saat Ini</Label>
-          <Input type="number" min="0" disabled={isEdit} className="font-mono disabled:opacity-60" value={f.stock} onChange={(e) => setF({ ...f, stock: Math.max(0, parseInt(e.target.value, 10) || 0) })} data-testid="product-form-stock-input" />
+          <Input type="number" min="0" disabled={isEdit} className="font-mono disabled:opacity-60" value={f.stock} onChange={(e) => setF({...f, stock: Math.max(0, parseInt(e.target.value, 10) || 0) })} data-testid="product-form-stock-input" />
           {isEdit && <p className="text-[11px] text-muted-foreground">Ubah lewat tombol stok agar tercatat.</p>}
         </div>
-        <div className="space-y-1.5"><Label>Stok Minimum</Label><Input type="number" min="0" className="font-mono" value={f.min_stock} onChange={(e) => setF({ ...f, min_stock: Math.max(0, parseInt(e.target.value, 10) || 0) })} data-testid="product-form-min-stock-input" /></div>
+        <div className="space-y-1.5"><Label>Stok Minimum</Label><Input type="number" min="0" className="font-mono" value={f.min_stock} onChange={(e) => setF({...f, min_stock: Math.max(0, parseInt(e.target.value, 10) || 0) })} data-testid="product-form-min-stock-input" /></div>
       </div>
      <div className="space-y-1.5">
-  <Label>Foto</Label>
-  <Input type="file" accept="image/*" onChange={handleImageUpload} />
-  {f.image_url && <img src={f.image_url} className="w-24 h-24 object-cover mt-2 rounded-lg border" />}
-</div>
+      <Label>Foto</Label>
+      <Input type="file" accept="image/*" onChange={handleImageUpload} />
+      {f.image_url && <img src={f.image_url} className="w-24 h-24 object-cover mt-2 rounded-lg border" />}
+     </div>
       <Button type="submit" disabled={busy} className="w-full h-11 bg-emerald-600 hover:bg-emerald-700 text-white" data-testid="product-form-submit-button">Simpan</Button>
     </form>
   );
@@ -76,7 +78,6 @@ const STOCK_MODE = {
 
 function StockForm({ action, busy, onSubmit }) {
   const { product, mode } = action;
-  const cfg = STOCK_MODE[mode];
   const [qty, setQty] = useState("");
   const [target, setTarget] = useState(String(product.stock));
   const [reason, setReason] = useState("adjustment");
@@ -103,19 +104,17 @@ function StockForm({ action, busy, onSubmit }) {
         <span className="text-muted-foreground"> · Stok saat ini: </span>
         <span className="font-mono font-bold" data-testid="stock-current-value">{product.stock}</span>
       </div>
-
-      {mode === "adjust" ? (
+      {mode === "adjust"? (
         <div className="space-y-1.5">
           <Label>Stok hasil hitung fisik</Label>
           <Input type="number" min="0" className="font-mono" value={target} onChange={(e) => setTarget(e.target.value)} data-testid="stock-target-input" />
         </div>
       ) : (
         <div className="space-y-1.5">
-          <Label>{mode === "add" ? "Jumlah masuk" : "Jumlah keluar"}</Label>
+          <Label>{mode === "add"? "Jumlah masuk" : "Jumlah keluar"}</Label>
           <Input type="number" min="1" className="font-mono" value={qty} onChange={(e) => setQty(e.target.value)} data-testid="stock-qty-input" autoFocus />
         </div>
       )}
-
       {mode === "reduce" && (
         <div className="space-y-1.5">
           <Label>Alasan</Label>
@@ -128,12 +127,10 @@ function StockForm({ action, busy, onSubmit }) {
           </Select>
         </div>
       )}
-
       <div className="space-y-1.5">
         <Label>Catatan (opsional)</Label>
         <Textarea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} data-testid="stock-notes-input" />
       </div>
-
       <Button type="submit" disabled={busy} className="w-full h-11 bg-emerald-600 hover:bg-emerald-700 text-white" data-testid="stock-submit-button">Simpan</Button>
     </form>
   );
@@ -142,7 +139,7 @@ function StockForm({ action, busy, onSubmit }) {
 export default function Products() {
   const { activeOutletId, activeOutlet } = useAuth();
   const qc = useQueryClient();
-  const { data = [], isLoading } = useQuery({ queryKey: ["products", activeOutletId], queryFn: () => fetchProducts(activeOutletId), enabled: !!activeOutletId });
+  const { data = [], isLoading } = useQuery({ queryKey: ["products", activeOutletId], queryFn: () => fetchProducts(activeOutletId), enabled:!!activeOutletId });
   const [editing, setEditing] = useState(null);
   const [stockAction, setStockAction] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -152,12 +149,19 @@ export default function Products() {
     try {
       if (f.id) {
        const { error } = await supabase.from("products").update({
-  name: f.name.trim(), sku: f.sku || null, price: f.price, cost_price: f.cost_price, min_stock: f.min_stock, image_url: f.image_url,
-}).eq("id", f.id);
+          name: f.name.trim(), sku: f.sku || null, price: f.price, cost_price: f.cost_price, min_stock: f.min_stock, image_url: f.image_url,
+        }).eq("id", f.id);
         if (error) throw error;
       } else {
         const { data: row, error } = await supabase.from("products").insert({
-          name: f.name.trim(), sku: f.sku || null, price: f.price, cost_price: f.cost_price, min_stock: f.min_stock, image_url: f.image_url, sto
+          outlet_id: activeOutletId,
+          name: f.name.trim(),
+          sku: f.sku || null,
+          price: f.price,
+          cost_price: f.cost_price,
+          min_stock: f.min_stock,
+          image_url: f.image_url,
+          stock: 0
         }).select("id").single();
         if (error) throw error;
         if (f.stock > 0) await recordStockMovement({ product_id: row.id, type: "purchase", delta: f.stock, notes: "Stok awal" });
@@ -208,38 +212,37 @@ export default function Products() {
             <th className="p-4 text-right">Aksi Stok</th><th className="p-4" />
           </tr></thead>
           <tbody>
-            {isLoading && <tr><td className="p-4 text-muted-foreground" colSpan={8}>Memuat…</td></tr>}
+            {isLoading && <tr><td className="p-4 text-muted-foreground" colSpan={9}>Memuat…</td></tr>}
             {data.map((p) => {
-              const minStock = p.min_stock ?? 0;
+              const minStock = p.min_stock?? 0;
               const low = p.stock <= minStock;
               return (
-              <tr key={p.id} className={`border-b last:border-b-0 ${low ? "bg-rose-50/70 hover:bg-rose-50" : "hover:bg-slate-50"}`} data-testid={`product-row-${p.id}`}>
-                     <td className="p-4 font-semibold">
+              <tr key={p.id} className={`border-b last:border-b-0 ${low? "bg-rose-50/70 hover:bg-rose-50" : "hover:bg-slate-50"}`} data-testid={`product-row-${p.id}`}>
+                     <td className="p-4">
         <div className="flex items-center gap-2">
           {p.image_url? (
             <img src={p.image_url} alt={p.name} className="h-10 w-10 rounded object-cover border" />
           ) : (
             <div className="h-10 w-10 rounded bg-slate-100 border flex items-center justify-center text-[10px] text-slate-400">No</div>
           )}
-          <div>
-            {p.name}
-            {low && <Badge variant="outline" className="border-rose-200 bg-rose-100 text-rose-700 gap-1 ml-2" data-testid={`product-low-badge-${p.id}`}><AlertTriangle className="h-3 w-3" /> Stok rendah</Badge>}
-          </div>
+          <span className="font-semibold">{p.name}
+            {low && <Badge variant="outline" className="border-rose-200 bg-rose-100 text-rose-700 gap-1 ml-2"><AlertTriangle className="h-3 w-3" /> rendah</Badge>}
+          </span>
         </div>
       </td>
                 <td className="p-4 font-mono text-slate-500">{p.sku}</td>
-                <td className="p-4 text-right font-mono text-slate-500">{rupiah(p.cost_price ?? 0)}</td>
+                <td className="p-4 text-right font-mono text-slate-500">{rupiah(p.cost_price?? 0)}</td>
                 <td className="p-4 text-right font-mono">{rupiah(p.price)}</td>
-                <td className="p-4 text-right font-mono text-slate-500" data-testid={`product-row-minstock-${p.id}`}>{minStock}</td>
-                <td className={`p-4 text-right font-mono font-bold ${low ? "text-rose-600" : ""}`} data-testid={`product-row-stock-${p.id}`}>{p.stock}</td>
+                <td className="p-4 text-right font-mono text-slate-500">{minStock}</td>
+                <td className="p-4 text-right font-mono font-bold">{p.stock}</td>
                 <td className="p-4 text-right whitespace-nowrap">
-                  <button onClick={() => setStockAction({ product: p, mode: "add" })} title="Tambah stok" className="p-2 rounded-md hover:bg-emerald-600 hover:text-white" data-testid={`product-add-stock-${p.id}`}><PackagePlus className="h-4 w-4" /></button>
-                  <button onClick={() => setStockAction({ product: p, mode: "reduce" })} title="Kurangi stok" className="p-2 rounded-md hover:bg-rose-600 hover:text-white" data-testid={`product-reduce-stock-${p.id}`}><PackageMinus className="h-4 w-4" /></button>
-                  <button onClick={() => setStockAction({ product: p, mode: "adjust" })} title="Sesuaikan stok" className="p-2 rounded-md hover:bg-amber-500 hover:text-white" data-testid={`product-adjust-stock-${p.id}`}><SlidersHorizontal className="h-4 w-4" /></button>
+                  <button onClick={() => setStockAction({ product: p, mode: "add" })} className="p-2 rounded-md hover:bg-emerald-600 hover:text-white"><PackagePlus className="h-4 w-4" /></button>
+                  <button onClick={() => setStockAction({ product: p, mode: "reduce" })} className="p-2 rounded-md hover:bg-rose-600 hover:text-white"><PackageMinus className="h-4 w-4" /></button>
+                  <button onClick={() => setStockAction({ product: p, mode: "adjust" })} className="p-2 rounded-md hover:bg-amber-500 hover:text-white"><SlidersHorizontal className="h-4 w-4" /></button>
                 </td>
                 <td className="p-4 text-right whitespace-nowrap">
-                  <button onClick={() => setEditing(p)} title="Ubah" className="p-2 rounded-md hover:bg-slate-900 hover:text-white" data-testid={`product-edit-${p.id}`}><Pencil className="h-4 w-4" /></button>
-                  <button onClick={() => del(p)} title="Hapus" className="p-2 rounded-md hover:bg-rose-600 hover:text-white" data-testid={`product-delete-${p.id}`}><Trash2 className="h-4 w-4" /></button>
+                  <button onClick={() => setEditing(p)} className="p-2 rounded-md hover:bg-slate-900 hover:text-white"><Pencil className="h-4 w-4" /></button>
+                  <button onClick={() => del(p)} className="p-2 rounded-md hover:bg-rose-600 hover:text-white"><Trash2 className="h-4 w-4" /></button>
                 </td>
               </tr>
               );
@@ -247,17 +250,17 @@ export default function Products() {
           </tbody>
         </table>
       </div>
-      <Dialog open={!!editing} onOpenChange={(v) => !v && setEditing(null)}>
-        <DialogContent className="sm:max-w-md bg-background" data-testid="product-form-dialog">
-          <DialogHeader><DialogTitle className="font-heading">{editing?.id ? "Ubah produk" : "Produk baru"}</DialogTitle></DialogHeader>
+      <Dialog open={!!editing} onOpenChange={(v) =>!v && setEditing(null)}>
+        <DialogContent className="sm:max-w-md bg-background">
+          <DialogHeader><DialogTitle className="font-heading">{editing?.id? "Ubah produk" : "Produk baru"}</DialogTitle></DialogHeader>
           {editing && <ProductForm key={editing.id || "new"} initial={editing} onSave={save} busy={busy} />}
         </DialogContent>
       </Dialog>
-      <Dialog open={!!stockAction} onOpenChange={(v) => !v && setStockAction(null)}>
-        <DialogContent className="sm:max-w-md bg-background" data-testid="stock-dialog">
+      <Dialog open={!!stockAction} onOpenChange={(v) =>!v && setStockAction(null)}>
+        <DialogContent className="sm:max-w-md bg-background">
           <DialogHeader>
-            <DialogTitle className="font-heading">{stockAction ? STOCK_MODE[stockAction.mode].title : ""}</DialogTitle>
-            <DialogDescription>{stockAction ? STOCK_MODE[stockAction.mode].desc : ""}</DialogDescription>
+            <DialogTitle className="font-heading">{stockAction? STOCK_MODE[stockAction.mode].title : ""}</DialogTitle>
+            <DialogDescription>{stockAction? STOCK_MODE[stockAction.mode].desc : ""}</DialogDescription>
           </DialogHeader>
           {stockAction && <StockForm key={stockAction.product.id + stockAction.mode} action={stockAction} busy={busy} onSubmit={runStock} />}
         </DialogContent>
