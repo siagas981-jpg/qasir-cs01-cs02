@@ -10,6 +10,12 @@
       "framework": "create-react-app"
     }
   },
+  "crons": [
+    {
+      "path": "/api/cron/archive",
+      "schedule": "0 0 1 */2 *"
+    }
+  ],
   "rewrites": [
     {
       "source": "/api/(.*)",
