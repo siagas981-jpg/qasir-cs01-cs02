@@ -14,7 +14,7 @@ import { useAuth } from "@/context/AuthContext";
 import { rupiah, parseRupiah } from "@/lib/format";
 import { fetchProducts } from "@/pages/POS";
 import { recordStockMovement, movementError } from "@/lib/inventory";
-
+import imageCompression from "browser-image-compression";
 const EMPTY = { name: "", sku: "", price: 0, stock: 0, min_stock: 0, cost_price: 0 };
 
 function ProductForm({ initial, onSave, busy }) {
