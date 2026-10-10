@@ -202,7 +202,7 @@ export default function Products() {
       <div className="rounded-xl border bg-white overflow-x-auto">
         <table className="w-full text-sm" data-testid="products-table">
           <thead><tr className="border-b text-left text-xs uppercase tracking-wider text-muted-foreground">
-            <th className="p-4">Nama</th><th className="p-4">SKU</th>
+            <th className="p-4">Gambar</th><th className="p-4">Nama</th><th className="p-4">SKU</th>
             <th className="p-4 text-right">Modal</th><th className="p-4 text-right">Harga</th>
             <th className="p-4 text-right">Stok Min</th><th className="p-4 text-right">Stok</th>
             <th className="p-4 text-right">Aksi Stok</th><th className="p-4" />
