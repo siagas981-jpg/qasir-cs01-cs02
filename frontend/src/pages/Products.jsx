@@ -214,12 +214,19 @@ export default function Products() {
               const low = p.stock <= minStock;
               return (
               <tr key={p.id} className={`border-b last:border-b-0 ${low ? "bg-rose-50/70 hover:bg-rose-50" : "hover:bg-slate-50"}`} data-testid={`product-row-${p.id}`}>
-                <td className="p-4 font-semibold">
-                  <div className="flex items-center gap-2">
-                    {p.name}
-                    {low && <Badge variant="outline" className="border-rose-200 bg-rose-100 text-rose-700 gap-1" data-testid={`product-low-badge-${p.id}`}><AlertTriangle className="h-3 w-3" /> Stok rendah</Badge>}
-                  </div>
-                </td>
+                     <td className="p-4 font-semibold">
+        <div className="flex items-center gap-2">
+          {p.image_url? (
+            <img src={p.image_url} alt={p.name} className="h-10 w-10 rounded object-cover border" />
+          ) : (
+            <div className="h-10 w-10 rounded bg-slate-100 border flex items-center justify-center text-[10px] text-slate-400">No</div>
+          )}
+          <div>
+            {p.name}
+            {low && <Badge variant="outline" className="border-rose-200 bg-rose-100 text-rose-700 gap-1 ml-2" data-testid={`product-low-badge-${p.id}`}><AlertTriangle className="h-3 w-3" /> Stok rendah</Badge>}
+          </div>
+        </div>
+      </td>
                 <td className="p-4 font-mono text-slate-500">{p.sku}</td>
                 <td className="p-4 text-right font-mono text-slate-500">{rupiah(p.cost_price ?? 0)}</td>
                 <td className="p-4 text-right font-mono">{rupiah(p.price)}</td>
