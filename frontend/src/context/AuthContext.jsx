@@ -24,12 +24,21 @@ export const AuthProvider = ({ children }) => {
           try {
             const { data: prof } = await supabase.from("profiles").select("*").eq("id", session.user.id).maybeSingle();
             if (mounted) setProfile(prof || null);
-          } catch {}
+          } catch (e) { console.warn("profile load skip", e?.message) }
           try {
             const { data: out } = await supabase.from("outlets").select("*").limit(20);
-            if (mounted) setOutlets(out || []);
-          } catch {}
+            if (mounted && out?.length) {
+              setOutlets(out);
+              if (!activeOutletId) {
+                const firstId = out[0].id;
+                setActiveOutletId(firstId);
+                if (typeof window!== "undefined") localStorage.setItem("active_outlet_id", firstId);
+              }
+            }
+          } catch (e) { console.warn("outlets load skip", e?.message) }
         }
+      } catch (e) {
+        console.warn("initial load error", e?.message);
       } finally {
         if (mounted) setLoading(false);
       }
@@ -37,28 +46,53 @@ export const AuthProvider = ({ children }) => {
     load();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_e, session) => {
-      setUser(session?.user || null);
-      if (!session?.user) { setProfile(null); setLoading(false); return; }
+      if (!mounted) return;
       try {
-        const { data: prof } = await supabase.from("profiles").select("*").eq("id", session.user.id).maybeSingle();
-        setProfile(prof || null);
-      } catch {}
-      setLoading(false);
+        setUser(session?.user || null);
+        if (!session?.user) {
+          setProfile(null);
+          setOutlets([]);
+          return;
+        }
+        try {
+          const { data: prof } = await supabase.from("profiles").select("*").eq("id", session.user.id).maybeSingle();
+          if (mounted) setProfile(prof || null);
+        } catch {}
+        try {
+          const { data: out } = await supabase.from("outlets").select("*").limit(20);
+          if (mounted && out?.length) {
+            setOutlets(out);
+            if (!localStorage.getItem("active_outlet_id")) {
+               const firstId = out[0].id;
+               setActiveOutletId(firstId);
+               localStorage.setItem("active_outlet_id", firstId);
+            }
+          }
+        } catch {}
+      } finally {
+        if (mounted) setLoading(false);
+      }
     });
 
     return () => { mounted = false; subscription.unsubscribe(); };
   }, []);
 
   const login = async (email, password) => {
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) throw error;
-    return data;
+    setLoading(true);
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) throw error;
+      return data;
+    } finally {
+      // onAuthStateChange akan set loading false, tapi jaga-jaga
+      setTimeout(() => setLoading(false), 1500);
+    }
   };
 
   const logout = async () => {
     await supabase.auth.signOut();
     if (typeof window!== "undefined") localStorage.removeItem("active_outlet_id");
-    setUser(null); setProfile(null); setActiveOutletId(null);
+    setUser(null); setProfile(null); setOutlets([]); setActiveOutletId(null);
   };
 
   const activeOutlet = outlets.find(o => o.id === activeOutletId) || outlets[0] || null;
