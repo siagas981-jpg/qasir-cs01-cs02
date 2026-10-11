@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
-import { Plus, Trash2, Wallet, TrendingUp, Receipt, Clock, Users, Timer, AlertTriangle, CheckCircle, LogIn } from "lucide-react";
+import { Plus, Trash2, Wallet, TrendingUp, Receipt, Clock, Timer, AlertTriangle, CheckCircle, LogIn } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from "recharts";
 import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
@@ -28,12 +28,13 @@ const fetchShifts = async (outletId, from, to) => {
   return data;
 };
 
-const fetchAttendance = async (outletId, from, to) => {
-  let q = supabase.from("attendance_logs").select("*").eq("outlet_id", outletId).order("tanggal", { ascending: false }).order("jam_asli_masuk", { ascending: false });
-  if (from) q = q.gte("tanggal", from);
-  if (to) q = q.lte("tanggal", to);
-  const { data, error } = await q;
-  if (error) throw error;
+// FIX FINAL: TANPA FILTER OUTLET BIAR PASTI MUNCUL
+const fetchAttendance = async () => {
+  const { data, error } = await supabase.from("attendance_logs").select("*").order("tanggal", { ascending: false }).order("jam_asli_masuk", { ascending: false }).limit(100);
+  if (error) {
+    console.error("ATT ERROR", error);
+    return [];
+  }
   return data;
 };
 
@@ -83,12 +84,10 @@ function IncomeTab({ outletId }) {
         </Select>
         {activeShift && <Badge className="bg-slate-900 text-white">{activeShift.nama_shift} • {activeShift.jam_masuk}-{activeShift.jam_pulang}</Badge>}
       </div>
-      <div className="mb-5"><StatCard label="Total Pemasukan" value={rupiah(total)} accent="emerald" testId="income-total" /></div>
-      <TableShell testId="income-table">
+      <div className="mb-5"><StatCard label="Total Pemasukan" value={rupiah(total)} accent="emerald" /></div>
+      <TableShell>
         <thead><tr className="border-b text-left text-xs uppercase tracking-wider text-muted-foreground"><th className="p-4">Tanggal</th><th className="p-4">Nota</th><th className="p-4 text-right">Jumlah</th></tr></thead>
-        <tbody>
-          {filtered.map((r) => (<tr key={r.id} className="border-b last:border-b-0 hover:bg-slate-50"><td className="p-4 text-slate-500">{dateTime(r.created_at)}</td><td className="p-4 font-mono">{shortId(r.id)}</td><td className="p-4 text-right font-mono font-bold text-emerald-700">{rupiah(r.total)}</td></tr>))}
-        </tbody>
+        <tbody>{filtered.map((r) => (<tr key={r.id} className="border-b hover:bg-slate-50"><td className="p-4 text-slate-500">{dateTime(r.created_at)}</td><td className="p-4 font-mono">{shortId(r.id)}</td><td className="p-4 text-right font-mono font-bold text-emerald-700">{rupiah(r.total)}</td></tr>))}</tbody>
       </TableShell>
     </div>
   );
@@ -127,8 +126,8 @@ function ExpenseTab({ outletId, userId }) {
   const { data: shifts = [] } = useQuery({ queryKey: ["shifts", outletId, range.from, range.to], queryFn: () => fetchShifts(outletId, range.from, range.to), enabled:!!outletId });
   const activeShift = shifts.find(s => s.id === shiftId);
   const rows = useMemo(() => {
-    let a = purchases.map((p) => ({ key: `p-${p.id}`, sortable: new Date(p.created_at), dateLabel: dateTime(p.created_at), rawDate: p.created_at, source: "Pembelian", label: p.name, amount: p.nilai, description: p.notes || "", manual: false }));
-    let b = expenses.map((e) => ({ key: `e-${e.id}`, id: e.id, sortable: new Date(e.date), dateLabel: new Date(e.date).toLocaleDateString("id-ID", { dateStyle: "medium" }), rawDate: e.date, source: "Operasional", label: e.category, amount: e.amount, description: e.description || "", manual: true }));
+    let a = purchases.map((p) => ({ key: `p-${p.id}`, sortable: new Date(p.created_at), dateLabel: dateTime(p.created_at), rawDate: p.created_at, source: "Pembelian", label: p.name, amount: p.nilai, manual: false }));
+    let b = expenses.map((e) => ({ key: `e-${e.id}`, id: e.id, sortable: new Date(e.date), dateLabel: new Date(e.date).toLocaleDateString("id-ID", { dateStyle: "medium" }), rawDate: e.date, source: "Operasional", label: e.category, amount: e.amount, manual: true }));
     let all = [...a,...b].sort((x, y) => y.sortable - x.sortable);
     if (shiftId!== "all" && activeShift) all = all.filter(r => isWithinShift(r.rawDate, activeShift));
     return all;
@@ -140,8 +139,8 @@ function ExpenseTab({ outletId, userId }) {
     <div>
       <RangeBar range={range}><Button onClick={() => setOpen(true)} className="bg-rose-600 hover:bg-rose-700 text-white gap-1"><Plus className="h-4 w-4" /> Pengeluaran Manual</Button></RangeBar>
       <div className="flex flex-wrap gap-2 mb-4 p-3 bg-slate-50 rounded-lg border"><span className="text-xs font-bold uppercase tracking-wider flex items-center gap-1"><Timer className="h-3 w-3"/> Filter Shift:</span><Select value={shiftId} onValueChange={setShiftId}><SelectTrigger className="w-[220px] h-8 bg-white"><SelectValue placeholder="Semua Jam" /></SelectTrigger><SelectContent><SelectItem value="all">Semua Jam</SelectItem>{shifts.map(s => <SelectItem key={s.id} value={s.id}>{s.tanggal} • {s.nama_shift}</SelectItem>)}</SelectContent></Select></div>
-      <div className="mb-5"><StatCard label="Total Pengeluaran" value={rupiah(total)} accent="rose" testId="expense-total" /></div>
-      <TableShell><thead><tr className="border-b text-left text-xs uppercase tracking-wider text-muted-foreground"><th className="p-4">Tanggal</th><th className="p-4">Sumber</th><th className="p-4">Kategori</th><th className="p-4 text-right">Jumlah</th><th className="p-4"></th></tr></thead><tbody>{rows.map((r) => (<tr key={r.key} className="border-b last:border-b-0 hover:bg-slate-50"><td className="p-4">{r.dateLabel}</td><td className="p-4"><Badge variant="outline">{r.source}</Badge></td><td className="p-4 font-semibold">{r.label}</td><td className="p-4 text-right font-mono font-bold text-rose-600">{rupiah(r.amount)}</td><td className="p-4">{r.manual && <button onClick={() => onDelete(r.id)} className="p-2 rounded-md hover:bg-rose-600 hover:text-white"><Trash2 className="h-4 w-4" /></button>}</td></tr>))}</tbody></TableShell>
+      <div className="mb-5"><StatCard label="Total Pengeluaran" value={rupiah(total)} accent="rose" /></div>
+      <TableShell><thead><tr className="border-b text-left text-xs uppercase tracking-wider text-muted-foreground"><th className="p-4">Tanggal</th><th className="p-4">Sumber</th><th className="p-4">Kategori</th><th className="p-4 text-right">Jumlah</th><th className="p-4"></th></tr></thead><tbody>{rows.map((r) => (<tr key={r.key} className="border-b hover:bg-slate-50"><td className="p-4">{r.dateLabel}</td><td className="p-4"><Badge variant="outline">{r.source}</Badge></td><td className="p-4 font-semibold">{r.label}</td><td className="p-4 text-right font-mono font-bold text-rose-600">{rupiah(r.amount)}</td><td className="p-4">{r.manual && <button onClick={() => onDelete(r.id)} className="p-2 rounded-md hover:bg-rose-600 hover:text-white"><Trash2 className="h-4 w-4" /></button>}</td></tr>))}</tbody></TableShell>
       <Dialog open={open} onOpenChange={setOpen}><DialogContent className="sm:max-w-md bg-background"><DialogHeader><DialogTitle>Tambah Pengeluaran Manual</DialogTitle><DialogDescription>Biaya operasional</DialogDescription></DialogHeader><ExpenseForm outletId={outletId} userId={userId} onDone={refresh} /></DialogContent></Dialog>
     </div>
   );
@@ -149,30 +148,26 @@ function ExpenseTab({ outletId, userId }) {
 
 function ProfitTab({ outletId }) {
   const range = useDateRange("all");
-  const [shiftId, setShiftId] = useState("all");
   const { data: sum } = useQuery({ queryKey: ["bk-profit", outletId, range.from, range.to], queryFn: () => fetchProfitSummary(outletId, range.from, range.to), enabled:!!outletId });
   const { data: series = [] } = useQuery({ queryKey: ["bk-profit-series", outletId], queryFn: () => fetchProfitSeries(outletId, 6), enabled:!!outletId });
-  const { data: shifts = [] } = useQuery({ queryKey: ["shifts", outletId, range.from, range.to], queryFn: () => fetchShifts(outletId, range.from, range.to), enabled:!!outletId });
   const s = sum || { pemasukan: 0, hpp: 0, pengeluaran: 0, laba: 0 };
   const profit = s.laba >= 0;
   return (
     <div>
       <RangeBar range={range} />
-      <div className="flex flex-wrap gap-2 mb-4 p-3 bg-slate-50 rounded-lg border"><span className="text-xs font-bold uppercase tracking-wider flex items-center gap-1"><Timer className="h-3 w-3"/> Lihat Laba per Shift:</span><Select value={shiftId} onValueChange={setShiftId}><SelectTrigger className="w-[220px] h-8 bg-white"><SelectValue placeholder="Semua Jam" /></SelectTrigger><SelectContent><SelectItem value="all">Semua Jam</SelectItem>{shifts.map(sf => <SelectItem key={sf.id} value={sf.id}>{sf.tanggal} • {sf.nama_shift} • {sf.profiles?.full_name}</SelectItem>)}</SelectContent></Select></div>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6"><StatCard label="Pemasukan" value={rupiah(s.pemasukan)} accent="emerald" /><StatCard label="HPP" value={rupiah(s.hpp)} accent="amber" /><StatCard label="Pengeluaran" value={rupiah(s.pengeluaran)} accent="rose" /><StatCard label={profit? "Laba" : "Rugi"} value={rupiah(s.laba)} accent={profit? "sky" : "rose"} /></div>
-      <div className="rounded-xl border bg-white p-4 mb-2"><p className="text-sm font-semibold mb-3">Laba Rugi per Bulan (6 bulan terakhir)</p><div className="h-72"><ResponsiveContainer width="100%" height="100%"><BarChart data={series}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#eef2f7" /><XAxis dataKey="label" tick={{ fontSize: 12 }} /><YAxis tickFormatter={formatShort} tick={{ fontSize: 12 }} width={48} /><Tooltip formatter={(v) => rupiah(v)} /><Legend /><Bar dataKey="pemasukan" name="Pemasukan" fill="#10b981" radius={[4,4,0,0]} /><Bar dataKey="pengeluaran" name="Pengeluaran" fill="#f43f5e" radius={[4,4,0,0]} /><Bar dataKey="laba" name="Laba" fill="#0ea5e9" radius={[4,4,0,0]} /></BarChart></ResponsiveContainer></div></div>
+      <div className="rounded-xl border bg-white p-4"><p className="text-sm font-semibold mb-3">Laba Rugi per Bulan (6 bulan terakhir)</p><div className="h-72"><ResponsiveContainer width="100%" height="100%"><BarChart data={series}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#eef2f7" /><XAxis dataKey="label" tick={{ fontSize: 12 }} /><YAxis tickFormatter={formatShort} tick={{ fontSize: 12 }} width={48} /><Tooltip formatter={(v) => rupiah(v)} /><Legend /><Bar dataKey="pemasukan" name="Pemasukan" fill="#10b981" radius={[4,4,0,0]} /><Bar dataKey="pengeluaran" name="Pengeluaran" fill="#f43f5e" radius={[4,4,0,0]} /><Bar dataKey="laba" name="Laba" fill="#0ea5e9" radius={[4,4,0,0]} /></BarChart></ResponsiveContainer></div></div>
     </div>
   );
 }
 
 function ShiftTab({ outletId }) {
   const qc = useQueryClient();
-  const range = useDateRange("all");
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ tanggal: new Date().toISOString().split("T")[0], nama_shift: "Shift Pagi", jam_masuk: "08:00", jam_pulang: "16:00", employee_id: "" });
   const { data: employees = [] } = useQuery({ queryKey: ["employees-list", outletId], queryFn: async () => { const { data } = await supabase.from("profiles").select("id, full_name").eq("outlet_id", outletId); return data || []; }, enabled:!!outletId });
   const { data: shifts = [], isLoading } = useQuery({ queryKey: ["shifts-manage", outletId], queryFn: () => fetchShifts(outletId), enabled:!!outletId });
-  const { data: attendance = [], isLoading: attLoading } = useQuery({ queryKey: ["attendance-logs", outletId, range.from, range.to], queryFn: () => fetchAttendance(outletId, range.from, range.to), enabled:!!outletId });
+  const { data: attendance = [], isLoading: attLoading } = useQuery({ queryKey: ["attendance-logs"], queryFn: () => fetchAttendance() });
 
   const save = async (e) => {
     e.preventDefault();
@@ -195,7 +190,6 @@ function ShiftTab({ outletId }) {
     if (s.includes("lembur") || s.includes("lebih")) return <Badge className="bg-emerald-100 text-emerald-800 border-emerald-200"><TrendingUp className="h-3 w-3 mr-1"/>{log.status}</Badge>;
     return <Badge className="bg-slate-100 text-slate-700"><CheckCircle className="h-3 w-3 mr-1"/>{log.status}</Badge>;
   };
-
   const formatTime = (iso) => iso? new Date(iso).toLocaleTimeString("id-ID", { hour: '2-digit', minute: '2-digit' }) : "-";
 
   return (
@@ -218,7 +212,6 @@ function ShiftTab({ outletId }) {
         </TableShell>
       </div>
 
-      {/* BAGIAN BARU: ABSENSI REAL */}
       <div className="rounded-xl border-2 border-slate-900 bg-white overflow-hidden">
         <div className="bg-slate-900 text-white p-4 flex justify-between items-center">
           <div className="flex items-center gap-2"><Timer className="h-5 w-5"/><h3 className="font-bold">Absensi Otomatis - Realita vs Jadwal</h3></div>
@@ -230,7 +223,7 @@ function ShiftTab({ outletId }) {
           <span className="flex items-center gap-1"><span className="h-2 w-2 bg-slate-400 rounded-full"/> Abu = Tepat</span>
         </div>
         <TableShell>
-          <thead><tr className="border-b text-left text-xs uppercase tracking-wider text-muted-foreground"><th className="p-3">Tgl</th><th className="p-3">Karyawan</th><th className="p-3">Jadwal</th><th className="p-3">Masuk Asli</th><th className="p-3">Pulang Asli</th><th className="p-3">Durasi Real</th><th className="p-3">Status</th></tr></thead>
+          <thead><tr className="border-b text-left text-xs uppercase tracking-wider text-muted-foreground"><th className="p-3">TGL</th><th className="p-3">KARYAWAN</th><th className="p-3">JADWAL</th><th className="p-3">MASUK ASLI</th><th className="p-3">PULANG ASLI</th><th className="p-3">DURASI REAL</th><th className="p-3">STATUS</th></tr></thead>
           <tbody>
             {attLoading && <tr><td colSpan={7} className="p-4 text-center">Memuat absensi...</td></tr>}
             {attendance.map(log => {
@@ -279,8 +272,8 @@ export default function Bookkeeping() {
   return (
     <div className="p-4 md:p-8 max-w-6xl">
       <PageHeader outlet={activeOutlet} title="Pembukuan" subtitle="Pemasukan, pengeluaran, dan laba rugi — otomatis dari data penjualan & pembelian." />
-      <Tabs defaultValue="income">
-        <TabsList className="mb-6 flex-wrap h-auto" data-testid="bookkeeping-tabs">
+      <Tabs defaultValue="shift">
+        <TabsList className="mb-6 flex-wrap h-auto">
           <TabsTrigger value="income"><Wallet className="h-4 w-4 mr-1.5" /> Pemasukan</TabsTrigger>
           <TabsTrigger value="expense"><Receipt className="h-4 w-4 mr-1.5" /> Pengeluaran</TabsTrigger>
           <TabsTrigger value="profit"><TrendingUp className="h-4 w-4 mr-1.5" /> Laba Rugi</TabsTrigger>
