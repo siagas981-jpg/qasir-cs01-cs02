@@ -34,7 +34,7 @@ function Field({ label, children }) {
 
 function EmployeeForm({ initial, outlets, busy, onSubmit, isEdit }) {
   const [f, setF] = useState(initial);
-  const set = (k, v) => setF((p) => ({ ...p, [k]: v }));
+  const set = (k, v) => setF((p) => ({...p, [k]: v }));
   return (
     <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); onSubmit(f); }}>
       <Field label="Nama Lengkap">
@@ -71,7 +71,7 @@ function EmployeeForm({ initial, outlets, busy, onSubmit, isEdit }) {
       </div>
       <div className="flex items-center justify-between rounded-lg border p-3">
         <span className="text-sm font-medium">Status Aktif</span>
-        <Switch checked={f.is_active !== false} onCheckedChange={(v) => set("is_active", v)} data-testid="employee-form-active-switch" />
+        <Switch checked={f.is_active!== false} onCheckedChange={(v) => set("is_active", v)} data-testid="employee-form-active-switch" />
       </div>
       <Button type="submit" disabled={busy} className="w-full h-11 bg-emerald-600 hover:bg-emerald-700 text-white" data-testid="employee-form-submit-button">Simpan</Button>
     </form>
@@ -99,7 +99,7 @@ export default function Employees() {
 
   const rows = useMemo(() => data.filter((p) => {
     const q = search.toLowerCase();
-    const matchQ = !q || (p.full_name || "").toLowerCase().includes(q) || (p.email || "").toLowerCase().includes(q);
+    const matchQ =!q || (p.full_name || "").toLowerCase().includes(q) || (p.email || "").toLowerCase().includes(q);
     return matchQ && (roleFilter === "all" || p.role === roleFilter) && (outletFilter === "all" || p.outlet_id === outletFilter);
   }), [data, search, roleFilter, outletFilter]);
 
@@ -122,7 +122,7 @@ export default function Employees() {
   const saveEdit = async (f) => {
     setBusy(true);
     const { error } = await supabase.from("profiles").update({
-      full_name: f.full_name, role: f.role, outlet_id: f.outlet_id || null, is_active: f.is_active !== false,
+      full_name: f.full_name, role: f.role, outlet_id: f.outlet_id || null, is_active: f.is_active!== false,
     }).eq("id", f.id);
     setBusy(false);
     if (error) return toast.error(error.message);
@@ -134,19 +134,24 @@ export default function Employees() {
   const resetPassword = async (f) => {
     setBusy(true);
     try {
-      await axios.post(`${API}/employees/${f.id}/password`, { password: f.password }, { headers: await authHeader() });
+      const { error } = await supabase.rpc('reset_user_password', {
+        target_user_id: f.id,
+        new_password: f.password
+      });
+      if (error) throw error;
       toast.success("Password karyawan diubah");
       setModal(null);
     } catch (err) {
-      toast.error(err.response?.data?.detail?.[0]?.msg || err.response?.data?.detail || "Gagal reset password");
+      console.error(err);
+      toast.error(err.message || "Gagal reset password");
     }
     setBusy(false);
   };
 
   const toggleActive = async (p) => {
-    const { error } = await supabase.from("profiles").update({ is_active: !p.is_active }).eq("id", p.id);
+    const { error } = await supabase.from("profiles").update({ is_active:!p.is_active }).eq("id", p.id);
     if (error) return toast.error(error.message);
-    toast.success(p.is_active ? "Karyawan dinonaktifkan" : "Karyawan diaktifkan");
+    toast.success(p.is_active? "Karyawan dinonaktifkan" : "Karyawan diaktifkan");
     reload();
   };
 
@@ -211,18 +216,18 @@ export default function Employees() {
                 <td className="p-4 font-semibold">{p.full_name || "—"}</td>
                 <td className="p-4 text-slate-600">{p.email}</td>
                 <td className="p-4"><span className={`text-xs font-bold uppercase tracking-wider rounded-full px-2 py-1 ${ROLE_STYLE[p.role] || ROLE_STYLE.cashier}`} data-testid={`employee-role-${p.id}`}>{p.role}</span></td>
-                <td className="p-4">{p.role === "owner" || p.role === "admin" ? "Semua outlet" : p.outlets?.name || "—"}</td>
+                <td className="p-4">{p.role === "owner" || p.role === "admin"? "Semua outlet" : p.outlets?.name || "—"}</td>
                 <td className="p-4">
-                  <span className={`text-xs font-bold rounded-full px-2 py-1 ${p.is_active !== false ? "bg-emerald-100 text-emerald-800" : "bg-slate-200 text-slate-600"}`} data-testid={`employee-status-${p.id}`}>
-                    {p.is_active !== false ? "Aktif" : "Tidak Aktif"}
+                  <span className={`text-xs font-bold rounded-full px-2 py-1 ${p.is_active!== false? "bg-emerald-100 text-emerald-800" : "bg-slate-200 text-slate-600"}`} data-testid={`employee-status-${p.id}`}>
+                    {p.is_active!== false? "Aktif" : "Tidak Aktif"}
                   </span>
                 </td>
                 <td className="p-4">
-                  {protectedRow(p) ? <span className="text-xs text-slate-400 float-right">—</span> : (
+                  {protectedRow(p)? <span className="text-xs text-slate-400 float-right">—</span> : (
                     <div className="flex justify-end gap-1">
                       <button onClick={() => setModal({ type: "edit", data: p })} title="Edit" className="p-2 rounded-md hover:bg-slate-900 hover:text-white transition-colors" data-testid={`employee-edit-${p.id}`}><Pencil className="h-4 w-4" /></button>
                       <button onClick={() => setModal({ type: "reset", data: p })} title="Reset Password" className="p-2 rounded-md hover:bg-sky-600 hover:text-white transition-colors" data-testid={`employee-reset-password-${p.id}`}><KeyRound className="h-4 w-4" /></button>
-                      <button onClick={() => toggleActive(p)} title={p.is_active !== false ? "Nonaktifkan" : "Aktifkan"} className={`p-2 rounded-md transition-colors ${p.is_active !== false ? "hover:bg-amber-500 hover:text-white" : "text-amber-600 hover:bg-emerald-600 hover:text-white"}`} data-testid={`employee-toggle-active-${p.id}`}><Power className="h-4 w-4" /></button>
+                      <button onClick={() => toggleActive(p)} title={p.is_active!== false? "Nonaktifkan" : "Aktifkan"} className={`p-2 rounded-md transition-colors ${p.is_active!== false? "hover:bg-amber-500 hover:text-white" : "text-amber-600 hover:bg-emerald-600 hover:text-white"}`} data-testid={`employee-toggle-active-${p.id}`}><Power className="h-4 w-4" /></button>
                       <button onClick={() => setModal({ type: "delete", data: p })} title="Hapus" className="p-2 rounded-md hover:bg-rose-600 hover:text-white transition-colors" data-testid={`employee-delete-${p.id}`}><Trash2 className="h-4 w-4" /></button>
                     </div>
                   )}
@@ -233,10 +238,10 @@ export default function Employees() {
         </table>
       </div>
 
-      <Dialog open={modal?.type === "add" || modal?.type === "edit"} onOpenChange={(v) => !v && setModal(null)}>
+      <Dialog open={modal?.type === "add" || modal?.type === "edit"} onOpenChange={(v) =>!v && setModal(null)}>
         <DialogContent className="sm:max-w-md bg-background" data-testid="employee-form-dialog">
           <DialogHeader>
-            <DialogTitle className="font-heading">{modal?.type === "edit" ? "Edit Karyawan" : "Tambah Karyawan"}</DialogTitle>
+            <DialogTitle className="font-heading">{modal?.type === "edit"? "Edit Karyawan" : "Tambah Karyawan"}</DialogTitle>
             {modal?.type === "add" && <DialogDescription>Akun dibuat di server (/api) — kunci admin tidak pernah ada di browser.</DialogDescription>}
           </DialogHeader>
           {modal && (
@@ -245,14 +250,14 @@ export default function Employees() {
               isEdit={modal.type === "edit"}
               outlets={outlets}
               busy={busy}
-              onSubmit={modal.type === "edit" ? saveEdit : createEmployee}
-              initial={modal.type === "edit" ? modal.data : { full_name: "", email: "", password: "", role: "cashier", outlet_id: "", is_active: true }}
+              onSubmit={modal.type === "edit"? saveEdit : createEmployee}
+              initial={modal.type === "edit"? modal.data : { full_name: "", email: "", password: "", role: "cashier", outlet_id: "", is_active: true }}
             />
           )}
         </DialogContent>
       </Dialog>
 
-      <Dialog open={modal?.type === "reset"} onOpenChange={(v) => !v && setModal(null)}>
+      <Dialog open={modal?.type === "reset"} onOpenChange={(v) =>!v && setModal(null)}>
         <DialogContent className="sm:max-w-sm bg-background" data-testid="reset-password-modal">
           <DialogHeader>
             <DialogTitle className="font-heading">Reset Password</DialogTitle>
@@ -269,7 +274,7 @@ export default function Employees() {
         </DialogContent>
       </Dialog>
 
-      <AlertDialog open={modal?.type === "delete"} onOpenChange={(v) => !v && setModal(null)}>
+      <AlertDialog open={modal?.type === "delete"} onOpenChange={(v) =>!v && setModal(null)}>
         <AlertDialogContent className="bg-background" data-testid="delete-employee-dialog">
           <AlertDialogHeader>
             <AlertDialogTitle>Hapus karyawan?</AlertDialogTitle>
