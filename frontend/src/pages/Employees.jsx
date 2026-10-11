@@ -1,6 +1,5 @@
 import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import axios from "axios";
 import { toast } from "sonner";
 import { KeyRound, Pencil, Plus, Power, Search, Trash2, Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -12,14 +11,6 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/lib/supabase/client";
 import { useAuth } from "@/context/AuthContext";
-
-const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
-
-const authHeader = async () => {
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session) throw new Error("Sesi berakhir, silakan login ulang");
-  return { Authorization: `Bearer ${session.access_token}` };
-};
 
 const ROLE_STYLE = {
   owner: "bg-slate-900 text-white",
@@ -116,12 +107,37 @@ export default function Employees() {
     if (!f.outlet_id) return toast.error("Pilih outlet");
     setBusy(true);
     try {
-      await axios.post(`${API}/employees`, f, { headers: await authHeader() });
-      toast.success("Karyawan dibuat");
+      // 1. Buat user di auth
+      const { data: signUp, error: signUpErr } = await supabase.auth.signUp({
+        email: f.email,
+        password: f.password,
+        options: { data: { full_name: f.full_name } }
+      });
+      if (signUpErr) throw signUpErr;
+      if (!signUp.user) throw new Error("Gagal buat user - cek di Supabase > Auth > Users, mungkin email sudah ada");
+
+      const newId = signUp.user.id;
+
+      // 2. Tunggu trigger buat profile, lalu update profile
+      await new Promise(r => setTimeout(r, 1000));
+
+      const { error: upsertErr } = await supabase.from("profiles").upsert({
+        id: newId,
+        email: f.email,
+        full_name: f.full_name,
+        role: f.role,
+        outlet_id: f.outlet_id,
+        is_active: f.is_active!== false,
+      }, { onConflict: 'id' });
+
+      if (upsertErr) throw upsertErr;
+
+      toast.success("Karyawan dibuat - bisa langsung login");
       setModal(null);
       reload();
     } catch (err) {
-      toast.error(err.response?.data?.detail?.[0]?.msg || err.response?.data?.detail || err.message || "Gagal membuat karyawan");
+      console.error(err);
+      toast.error(err.message || "Gagal membuat karyawan. Jika email sudah terdaftar, hapus dulu di Supabase > Authentication > Users");
     }
     setBusy(false);
   };
@@ -151,7 +167,7 @@ export default function Employees() {
       setShowResetPw(false);
     } catch (err) {
       console.error(err);
-      toast.error(err.message || "Gagal reset password");
+      toast.error(err.message || "Gagal reset password - jalankan dulu SQL reset_user_password di Supabase");
     }
     setBusy(false);
   };
@@ -166,12 +182,20 @@ export default function Employees() {
   const deleteEmployee = async () => {
     setBusy(true);
     try {
-      await axios.delete(`${API}/employees/${modal.data.id}`, { headers: await authHeader() });
+      // Hapus profile dulu
+      const { error: profileErr } = await supabase.from("profiles").delete().eq("id", modal.data.id);
+      if (profileErr) throw profileErr;
+
+      // Coba hapus auth user via rpc jika ada
+      try {
+        await supabase.rpc('delete_user', { target_user_id: modal.data.id });
+      } catch {}
+
       toast.success("Karyawan dihapus");
       setModal(null);
       reload();
     } catch (err) {
-      toast.error(err.response?.data?.detail || "Gagal menghapus");
+      toast.error(err.message || "Gagal menghapus");
     }
     setBusy(false);
   };
