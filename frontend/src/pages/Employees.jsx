@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import axios from "axios";
 import { toast } from "sonner";
-import { KeyRound, Pencil, Plus, Power, Search, Trash2 } from "lucide-react";
+import { KeyRound, Pencil, Plus, Power, Search, Trash2, Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -34,6 +34,7 @@ function Field({ label, children }) {
 
 function EmployeeForm({ initial, outlets, busy, onSubmit, isEdit }) {
   const [f, setF] = useState(initial);
+  const [showPw, setShowPw] = useState(false);
   const set = (k, v) => setF((p) => ({...p, [k]: v }));
   return (
     <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); onSubmit(f); }}>
@@ -46,7 +47,12 @@ function EmployeeForm({ initial, outlets, busy, onSubmit, isEdit }) {
             <Input type="email" required value={f.email} onChange={(e) => set("email", e.target.value)} data-testid="employee-form-email-input" />
           </Field>
           <Field label="Password (min. 6)">
-            <Input type="password" required minLength={6} value={f.password} onChange={(e) => set("password", e.target.value)} data-testid="employee-form-password-input" />
+            <div className="relative">
+              <Input type={showPw? "text" : "password"} required minLength={6} value={f.password} onChange={(e) => set("password", e.target.value)} className="pr-10" data-testid="employee-form-password-input" />
+              <button type="button" onClick={() => setShowPw(!showPw)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-900">
+                {showPw? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
           </Field>
         </>
       )}
@@ -79,13 +85,14 @@ function EmployeeForm({ initial, outlets, busy, onSubmit, isEdit }) {
 }
 
 export default function Employees() {
-  const { outlets, user } = useAuth();
+  const { outlets } = useAuth();
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState("all");
   const [outletFilter, setOutletFilter] = useState("all");
   const [modal, setModal] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [showResetPw, setShowResetPw] = useState(false);
 
   const { data = [], isLoading } = useQuery({
     queryKey: ["employees"],
@@ -141,6 +148,7 @@ export default function Employees() {
       if (error) throw error;
       toast.success("Password karyawan diubah");
       setModal(null);
+      setShowResetPw(false);
     } catch (err) {
       console.error(err);
       toast.error(err.message || "Gagal reset password");
@@ -226,7 +234,7 @@ export default function Employees() {
                   {protectedRow(p)? <span className="text-xs text-slate-400 float-right">—</span> : (
                     <div className="flex justify-end gap-1">
                       <button onClick={() => setModal({ type: "edit", data: p })} title="Edit" className="p-2 rounded-md hover:bg-slate-900 hover:text-white transition-colors" data-testid={`employee-edit-${p.id}`}><Pencil className="h-4 w-4" /></button>
-                      <button onClick={() => setModal({ type: "reset", data: p })} title="Reset Password" className="p-2 rounded-md hover:bg-sky-600 hover:text-white transition-colors" data-testid={`employee-reset-password-${p.id}`}><KeyRound className="h-4 w-4" /></button>
+                      <button onClick={() => { setShowResetPw(false); setModal({ type: "reset", data: p }); }} title="Reset Password" className="p-2 rounded-md hover:bg-sky-600 hover:text-white transition-colors" data-testid={`employee-reset-password-${p.id}`}><KeyRound className="h-4 w-4" /></button>
                       <button onClick={() => toggleActive(p)} title={p.is_active!== false? "Nonaktifkan" : "Aktifkan"} className={`p-2 rounded-md transition-colors ${p.is_active!== false? "hover:bg-amber-500 hover:text-white" : "text-amber-600 hover:bg-emerald-600 hover:text-white"}`} data-testid={`employee-toggle-active-${p.id}`}><Power className="h-4 w-4" /></button>
                       <button onClick={() => setModal({ type: "delete", data: p })} title="Hapus" className="p-2 rounded-md hover:bg-rose-600 hover:text-white transition-colors" data-testid={`employee-delete-${p.id}`}><Trash2 className="h-4 w-4" /></button>
                     </div>
@@ -242,7 +250,6 @@ export default function Employees() {
         <DialogContent className="sm:max-w-md bg-background" data-testid="employee-form-dialog">
           <DialogHeader>
             <DialogTitle className="font-heading">{modal?.type === "edit"? "Edit Karyawan" : "Tambah Karyawan"}</DialogTitle>
-            {modal?.type === "add" && <DialogDescription>Akun dibuat di server (/api) — kunci admin tidak pernah ada di browser.</DialogDescription>}
           </DialogHeader>
           {modal && (
             <EmployeeForm
@@ -266,7 +273,12 @@ export default function Employees() {
           {modal?.type === "reset" && (
             <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); resetPassword({ id: modal.data.id, password: new FormData(e.target).get("password") }); }}>
               <Field label="Password baru (min. 6)">
-                <Input name="password" type="password" required minLength={6} autoFocus data-testid="reset-password-modal-input" />
+                <div className="relative">
+                  <Input name="password" type={showResetPw? "text" : "password"} required minLength={6} autoFocus className="pr-10" data-testid="reset-password-modal-input" />
+                  <button type="button" onClick={() => setShowResetPw(!showResetPw)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-900">
+                    {showResetPw? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
               </Field>
               <Button type="submit" disabled={busy} className="w-full h-11 bg-emerald-600 hover:bg-emerald-700 text-white" data-testid="reset-password-modal-submit">Simpan password</Button>
             </form>
@@ -278,11 +290,11 @@ export default function Employees() {
         <AlertDialogContent className="bg-background" data-testid="delete-employee-dialog">
           <AlertDialogHeader>
             <AlertDialogTitle>Hapus karyawan?</AlertDialogTitle>
-            <AlertDialogDescription>{modal?.data?.full_name || modal?.data?.email} akan dihapus permanen dari sistem login dan profil. Transaksi yang sudah ada tidak terpengaruh.</AlertDialogDescription>
+            <AlertDialogDescription>{modal?.data?.full_name || modal?.data?.email} akan dihapus permanen.</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel data-testid="delete-cancel-button">Batal</AlertDialogCancel>
-            <AlertDialogAction onClick={deleteEmployee} disabled={busy} className="bg-rose-600 hover:bg-rose-700 text-white" data-testid="delete-confirm-button">Hapus</AlertDialogAction>
+            <AlertDialogCancel>Batal</AlertDialogCancel>
+            <AlertDialogAction onClick={deleteEmployee} disabled={busy} className="bg-rose-600 hover:bg-rose-700 text-white">Hapus</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
