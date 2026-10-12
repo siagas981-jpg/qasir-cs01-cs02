@@ -7,20 +7,25 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [session, setSession] = useState(null);
+  const [profile, setProfile] = useState(null);
+  const [outlets, setOutlets] = useState([]);
+  const [activeOutletId, setActiveOutletIdState] = useState(() => {
+    return localStorage.getItem('activeOutletId') || null;
+  });
 
   useEffect(() => {
     const timeout = setTimeout(() => setLoading(false), 5000);
-    
+
     supabase.auth.getSession().then(({ data: { session } }) => {
       clearTimeout(timeout);
       setSession(session);
-      setUser(session?.user ?? null);
+      setUser(session?.user?? null);
       setLoading(false);
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
-      setUser(session?.user ?? null);
+      setUser(session?.user?? null);
       setLoading(false);
     });
 
@@ -29,6 +34,51 @@ export const AuthProvider = ({ children }) => {
       subscription.unsubscribe();
     };
   }, []);
+
+  // Ambil profile & outlets
+  useEffect(() => {
+    if (!user) {
+      setProfile(null);
+      return;
+    }
+    const fetchData = async () => {
+      // 1. Ambil profile
+      const { data: profileData } = await supabase
+       .from('profiles')
+       .select('*')
+       .eq('id', user.id)
+       .single();
+
+      if (profileData) setProfile(profileData);
+
+      // 2. Ambil outlets
+      const { data: outletsData } = await supabase
+       .from('outlets')
+       .select('*')
+       .order('name');
+
+      if (outletsData && outletsData.length > 0) {
+        setOutlets(outletsData);
+        // Jika belum ada active outlet, set ke outlet pertama atau outlet milik profile
+        if (!activeOutletId) {
+          const defaultId = profileData?.outlet_id || outletsData[0].id;
+          setActiveOutletIdState(defaultId);
+          localStorage.setItem('activeOutletId', defaultId);
+        }
+      }
+    };
+    fetchData();
+  }, [user]);
+
+  // Owner = role owner ATAU email kamu
+  const isOwner = profile?.role === 'owner' || user?.email === 'siagas981@gmail.com' || user?.email === 'owner@qasir.com';
+
+  const activeOutlet = outlets.find(o => o.id === activeOutletId) || outlets[0] || null;
+
+  const setActiveOutletId = (id) => {
+    setActiveOutletIdState(id);
+    localStorage.setItem('activeOutletId', id);
+  };
 
   const signIn = async (email, password) => {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
@@ -43,11 +93,26 @@ export const AuthProvider = ({ children }) => {
   };
 
   const signOut = async () => {
+    localStorage.removeItem('activeOutletId');
     const { error } = await supabase.auth.signOut();
     if (error) throw error;
   };
 
-  const value = { user, session, loading, signIn, signUp, signOut, login: signIn };
+  const value = {
+    user,
+    session,
+    loading,
+    profile,
+    outlets,
+    activeOutlet,
+    activeOutletId,
+    setActiveOutletId,
+    isOwner,
+    signIn,
+    signUp,
+    signOut,
+    login: signIn
+  };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
