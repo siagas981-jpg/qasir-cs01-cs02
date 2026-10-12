@@ -82,7 +82,7 @@ export const AuthProvider = ({ children }) => {
   const signOut = async () => {
     try {
       if (user && profile && profile.role!== 'owner') {
-        const today = new Date().toISOString().split('T')[0];
+        const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Makassar' });
         const { data: openLog } = await supabase.from('attendance_logs').select('*').eq('employee_id', user.id).eq('tanggal', today).is('jam_asli_pulang', null).order('jam_asli_masuk', { ascending: false }).limit(1).maybeSingle();
         if (openLog) {
           const now = new Date();
@@ -90,7 +90,9 @@ export const AuthProvider = ({ children }) => {
           let durMenit = Math.floor((now - masuk) / 60000);
           if (durMenit < 1) durMenit = 1;
           let statusAkhir = openLog.status || 'Tepat';
-          if (openLog.jam_jadwal_pulang) {
+          if (!openLog.jam_jadwal_masuk) {
+  statusAkhir = 'Manager / Tanpa Jadwal - Hadir';
+} else if (openLog.jam_jadwal_pulang) {
             const [h,m] = openLog.jam_jadwal_pulang.split(':').map(Number);
             const jadwalPulang = new Date(); jadwalPulang.setHours(h,m,0,0);
             const selisih = Math.floor((now - jadwalPulang)/60000);
