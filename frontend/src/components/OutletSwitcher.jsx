@@ -1,10 +1,9 @@
 import React from 'react';
 import { useAuth } from '../context/AuthContext';
 
-export default function OutletSwitcher() {
+export function OutletSwitcher() {
   const { outlets, activeOutlet, setActiveOutletId, isOwner } = useAuth();
 
-  // Jika owner, tampilkan dropdown ganti CS 01 <> CS 02
   if (isOwner) {
     return (
       <select
@@ -12,7 +11,7 @@ export default function OutletSwitcher() {
         onChange={(e) => setActiveOutletId(e.target.value)}
         className="border rounded px-2 py-1 text-sm font-medium bg-white"
       >
-        {outlets.length === 0? (
+        {outlets.length === 0 ? (
           <option>Memuat outlet...</option>
         ) : (
           outlets.map(outlet => (
@@ -25,10 +24,11 @@ export default function OutletSwitcher() {
     );
   }
 
-  // Jika bukan owner (karyawan)
   return (
     <span className="text-sm font-medium">
       {activeOutlet?.name || "Memuat outlet..."}
     </span>
   );
 }
+
+export default OutletSwitcher;
