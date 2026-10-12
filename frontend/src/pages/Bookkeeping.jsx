@@ -18,7 +18,6 @@ import { fetchExpenses, addExpense, deleteExpense, fetchProfitSummary, fetchProf
 import { PageHeader, RangeBar, ExportButtons, StatCard, TableShell, shortId, formatShort } from "@/components/reports/parts";
 import { supabase } from "@/lib/supabase/client";
 
-// HELPER SHIFT
 const fetchShifts = async (outletId, from, to) => {
   let q = supabase.from("shifts").select("*, profiles(full_name)").eq("outlet_id", outletId).order("tanggal", { ascending: false });
   if (from) q = q.gte("tanggal", from);
@@ -28,14 +27,25 @@ const fetchShifts = async (outletId, from, to) => {
   return data;
 };
 
-// FIX FINAL: TANPA FILTER OUTLET BIAR PASTI MUNCUL
-const fetchAttendance = async () => {
-  const { data, error } = await supabase.from("attendance_logs").select("*").order("tanggal", { ascending: false }).order("jam_asli_masuk", { ascending: false }).limit(100);
+// FIX: FILTER BY OUTLET + HIDE OWNER
+const fetchAttendance = async (outletId) => {
+  if (!outletId) return [];
+  const { data, error } = await supabase
+   .from("attendance_logs")
+   .select("*")
+   .eq("outlet_id", outletId)
+   .order("tanggal", { ascending: false })
+   .order("jam_asli_masuk", { ascending: false })
+   .limit(100);
   if (error) {
     console.error("ATT ERROR", error);
     return [];
   }
-  return data;
+  // Filter buang Owner yang nyangkut
+  return (data || []).filter(l => {
+    const name = (l.employee_name || "").toLowerCase();
+    return name!== "owner" && name!== "siagas981@gmail.com" &&!name.includes("owner");
+  });
 };
 
 const isWithinShift = (dateStr, shift) => {
@@ -167,7 +177,7 @@ function ShiftTab({ outletId }) {
   const [form, setForm] = useState({ tanggal: new Date().toISOString().split("T")[0], nama_shift: "Shift Pagi", jam_masuk: "08:00", jam_pulang: "16:00", employee_id: "" });
   const { data: employees = [] } = useQuery({ queryKey: ["employees-list", outletId], queryFn: async () => { const { data } = await supabase.from("profiles").select("id, full_name").eq("outlet_id", outletId); return data || []; }, enabled:!!outletId });
   const { data: shifts = [], isLoading } = useQuery({ queryKey: ["shifts-manage", outletId], queryFn: () => fetchShifts(outletId), enabled:!!outletId });
-  const { data: attendance = [], isLoading: attLoading } = useQuery({ queryKey: ["attendance-logs"], queryFn: () => fetchAttendance() });
+  const { data: attendance = [], isLoading: attLoading } = useQuery({ queryKey: ["attendance-logs", outletId], queryFn: () => fetchAttendance(outletId), enabled:!!outletId });
 
   const save = async (e) => {
     e.preventDefault();
@@ -182,15 +192,28 @@ function ShiftTab({ outletId }) {
     if (error) return toast.error(error.message);
     toast.success("Shift dihapus"); qc.invalidateQueries({ queryKey: ["shifts"] });
   };
+  const delAtt = async (id) => {
+    if (!confirm("Hapus data absensi Owner / data error ini?")) return;
+    const { error } = await supabase.from("attendance_logs").delete().eq("id", id);
+    if (error) return toast.error(error.message);
+    toast.success("Absensi dihapus"); qc.invalidateQueries({ queryKey: ["attendance-logs", outletId] });
+  };
 
   const getStatusBadge = (log) => {
     if (!log.jam_asli_pulang) return <Badge className="bg-amber-100 text-amber-800 border-amber-200"><LogIn className="h-3 w-3 mr-1"/> Sedang Kerja</Badge>;
     const s = (log.status || "").toLowerCase();
     if (s.includes("telat") || s.includes("kurang")) return <Badge className="bg-rose-100 text-rose-800 border-rose-200"><AlertTriangle className="h-3 w-3 mr-1"/>{log.status}</Badge>;
     if (s.includes("lembur") || s.includes("lebih")) return <Badge className="bg-emerald-100 text-emerald-800 border-emerald-200"><TrendingUp className="h-3 w-3 mr-1"/>{log.status}</Badge>;
-    return <Badge className="bg-slate-100 text-slate-700"><CheckCircle className="h-3 w-3 mr-1"/>{log.status}</Badge>;
+    return <Badge className="bg-slate-100 text-slate-700"><CheckCircle className="h-3 w-3 mr-1"/>{log.status || "Tepat"}</Badge>;
   };
-  const formatTime = (iso) => iso? new Date(iso).toLocaleTimeString("id-ID", { hour: '2-digit', minute: '2-digit' }) : "-";
+  const formatTime = (iso) => {
+    if (!iso) return "-";
+    try {
+      const d = new Date(iso);
+      if (isNaN(d.getTime())) return iso.slice(0,5);
+      return d.toLocaleTimeString("id-ID", { hour: '2-digit', minute: '2-digit' });
+    } catch { return "-"; }
+  };
 
   return (
     <div className="space-y-8">
@@ -223,9 +246,9 @@ function ShiftTab({ outletId }) {
           <span className="flex items-center gap-1"><span className="h-2 w-2 bg-slate-400 rounded-full"/> Abu = Tepat</span>
         </div>
         <TableShell>
-          <thead><tr className="border-b text-left text-xs uppercase tracking-wider text-muted-foreground"><th className="p-3">TGL</th><th className="p-3">KARYAWAN</th><th className="p-3">JADWAL</th><th className="p-3">MASUK ASLI</th><th className="p-3">PULANG ASLI</th><th className="p-3">DURASI REAL</th><th className="p-3">STATUS</th></tr></thead>
+          <thead><tr className="border-b text-left text-xs uppercase tracking-wider text-muted-foreground"><th className="p-3">TGL</th><th className="p-3">KARYAWAN</th><th className="p-3">JADWAL</th><th className="p-3">MASUK ASLI</th><th className="p-3">PULANG ASLI</th><th className="p-3">DURASI REAL</th><th className="p-3">STATUS</th><th className="p-3"></th></tr></thead>
           <tbody>
-            {attLoading && <tr><td colSpan={7} className="p-4 text-center">Memuat absensi...</td></tr>}
+            {attLoading && <tr><td colSpan={8} className="p-4 text-center">Memuat absensi...</td></tr>}
             {attendance.map(log => {
               const durReal = log.durasi_asli_menit? `${Math.floor(log.durasi_asli_menit/60)}j ${log.durasi_asli_menit%60}m` : log.jam_asli_pulang? "hitung..." : "kerja...";
               const rowColor =!log.jam_asli_pulang? "bg-amber-50" : (log.status?.toLowerCase().includes("kurang") || log.status?.toLowerCase().includes("telat"))? "bg-rose-50" : log.status?.toLowerCase().includes("lembur")? "bg-emerald-50" : "";
@@ -233,15 +256,16 @@ function ShiftTab({ outletId }) {
                 <tr key={log.id} className={`border-b hover:bg-slate-50 ${rowColor}`}>
                   <td className="p-3 text-xs">{log.tanggal}</td>
                   <td className="p-3 font-semibold text-sm">{log.employee_name}</td>
-                  <td className="p-3 font-mono text-xs">{log.jam_jadwal_masuk||"-"} - {log.jam_jadwal_pulang||"-"} <br/><span className="text-[10px] text-muted-foreground">{log.shift_name}</span></td>
+                  <td className="p-3 font-mono text-xs">{log.jam_jadwal_masuk? `${log.jam_jadwal_masuk} - ${log.jam_jadwal_pulang}` : "- Tanpa Jadwal"} <br/><span className="text-[10px] text-muted-foreground">{log.shift_name || ""}</span></td>
                   <td className="p-3 font-mono text-sm font-bold">{formatTime(log.jam_asli_masuk)}</td>
                   <td className="p-3 font-mono text-sm">{formatTime(log.jam_asli_pulang)}</td>
                   <td className="p-3 text-sm">{durReal} {log.selisih_menit? <span className={`text-xs ml-1 ${log.selisih_menit<0?'text-rose-600':'text-emerald-600'}`}>({log.selisih_menit>0?'+':''}{log.selisih_menit}m)</span> : null}</td>
                   <td className="p-3">{getStatusBadge(log)}</td>
+                  <td className="p-3"><button onClick={()=>delAtt(log.id)} className="p-1 hover:text-rose-600"><Trash2 className="h-3 w-3"/></button></td>
                 </tr>
               )
             })}
-            {attendance.length===0 && <tr><td colSpan={7} className="p-8 text-center text-muted-foreground text-sm">Belum ada data login. Data akan muncul otomatis setelah karyawan login hari ini.<br/>Pastikan AuthContext sudah di-update.</td></tr>}
+            {attendance.length===0 && <tr><td colSpan={8} className="p-8 text-center text-muted-foreground text-sm">Belum ada absensi di outlet ini. Login sebagai karyawan (fitry/eqy/haekal) untuk test.</td></tr>}
           </tbody>
         </TableShell>
       </div>
