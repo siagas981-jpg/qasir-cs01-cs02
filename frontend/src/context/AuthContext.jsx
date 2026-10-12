@@ -1,102 +1,27 @@
-import { createContext, useContext, useEffect, useState } from "react";
-import { supabase } from "@/lib/supabase/client";
-
-const AuthContext = createContext();
-
-export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null);
-  const [profile, setProfile] = useState(null);
-  const [outlets, setOutlets] = useState([]);
-  const [activeOutletId, setActiveOutletId] = useState(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    let mounted = true;
-    const saved = typeof window!== "undefined"? localStorage.getItem("active_outlet_id") : null;
-    if (saved) setActiveOutletId(saved);
-
-    const load = async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!mounted) return;
-        setUser(session?.user || null);
-        if (session?.user) {
-          try {
-            const { data: prof } = await supabase.from("profiles").select("*").eq("id", session.user.id).maybeSingle();
-            if (mounted) setProfile(prof || null);
-          } catch {}
-          try {
-            const { data: out } = await supabase.from("outlets").select("*").limit(20);
-            if (mounted && out) {
-              setOutlets(out);
-              if (!saved && out[0]) {
-                setActiveOutletId(out[0].id);
-                localStorage.setItem("active_outlet_id", out[0].id);
-              }
-            }
-          } catch {}
-        }
-      } finally {
-        if (mounted) setLoading(false);
-      }
-    };
-    load();
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_e, session) => {
-      if (!mounted) return;
-      setUser(session?.user || null);
-      if (!session?.user) {
-        setProfile(null);
-        setOutlets([]);
-        setLoading(false);
-        return;
-      }
-      try {
-        const { data: prof } = await supabase.from("profiles").select("*").eq("id", session.user.id).maybeSingle();
-        if (mounted) setProfile(prof || null);
-      } catch {}
-      try {
-        const { data: out } = await supabase.from("outlets").select("*").limit(20);
-        if (mounted && out?.length) {
-          setOutlets(out);
-          const cur = localStorage.getItem("active_outlet_id");
-          if (!cur) {
-            setActiveOutletId(out[0].id);
-            localStorage.setItem("active_outlet_id", out[0].id);
-          }
-        }
-      } catch {}
-      if (mounted) setLoading(false);
-    });
-
-    return () => { mounted = false; subscription.unsubscribe(); };
-  }, []);
-
-  const login = async (email, password) => {
-    setLoading(true);
-    try {
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) throw error;
-      return data;
-    } catch (e) {
+// di AuthContext.jsx
+useEffect(() => {
+  let mounted = true;
+  const timeout = setTimeout(() => {
+    if(mounted) {
+      console.log("Auth timeout - forcing logout");
       setLoading(false);
-      throw e;
+    }
+  }, 5000); // paksa keluar loading setelah 5 detik
+
+  const init = async () => {
+    try {
+      const { data, error } = await supabase.auth.getSession();
+      if(error) throw error;
+      if(mounted) setSession(data.session);
+    } catch (err) {
+      console.error("Auth error:", err);
+    } finally {
+      if(mounted) {
+        clearTimeout(timeout);
+        setLoading(false);
+      }
     }
   };
-
-  const logout = async () => {
-    await supabase.auth.signOut();
-    if (typeof window!== "undefined") localStorage.removeItem("active_outlet_id");
-    setUser(null); setProfile(null); setOutlets([]); setActiveOutletId(null);
-  };
-
-  const activeOutlet = outlets.find(o => o.id === activeOutletId) || outlets[0] || null;
-
-  return (
-    <AuthContext.Provider value={{ user, profile, outlets, activeOutlet, activeOutletId, setActiveOutletId, loading, login, logout }}>
-      {children}
-    </AuthContext.Provider>
-  );
-};
-
-export const useAuth = () => useContext(AuthContext);
+  init();
+  return () => { mounted = false; clearTimeout(timeout); }
+}, [])
