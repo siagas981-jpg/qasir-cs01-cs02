@@ -9,18 +9,12 @@ export const AuthProvider = ({ children }) => {
   const [session, setSession] = useState(null);
 
   useEffect(() => {
-    const timeout = setTimeout(() => {
-      console.log('Auth TIMEOUT - force finish');
-      setLoading(false);
-    }, 5000);
-
+    const timeout = setTimeout(() => setLoading(false), 5000);
+    
     supabase.auth.getSession().then(({ data: { session } }) => {
       clearTimeout(timeout);
       setSession(session);
       setUser(session?.user ?? null);
-      setLoading(false);
-    }).catch(err => {
-      clearTimeout(timeout);
       setLoading(false);
     });
 
@@ -36,7 +30,25 @@ export const AuthProvider = ({ children }) => {
     };
   }, []);
 
-  const value = { user, session, loading, signOut: () => supabase.auth.signOut() };
+  const signIn = async (email, password) => {
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) throw error;
+    return data;
+  };
+
+  const signUp = async (email, password) => {
+    const { data, error } = await supabase.auth.signUp({ email, password });
+    if (error) throw error;
+    return data;
+  };
+
+  const signOut = async () => {
+    const { error } = await supabase.auth.signOut();
+    if (error) throw error;
+  };
+
+  const value = { user, session, loading, signIn, signUp, signOut, login: signIn };
+
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
 
