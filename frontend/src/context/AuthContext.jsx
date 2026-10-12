@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { supabase } from '../lib/supabase';
+import { supabase } from '../lib/supabase/client';
 
 const AuthContext = createContext();
 
@@ -9,23 +9,17 @@ export const AuthProvider = ({ children }) => {
   const [session, setSession] = useState(null);
 
   useEffect(() => {
-    console.log('Auth: getting session...');
-    
-    // Timeout darurat - kalau 5 detik gak kelar, paksa kelar
     const timeout = setTimeout(() => {
-      console.log('Auth: TIMEOUT - force finish loading');
+      console.log('Auth TIMEOUT - force finish');
       setLoading(false);
     }, 5000);
 
     supabase.auth.getSession().then(({ data: { session } }) => {
-      console.log('Auth: session', !!session);
       clearTimeout(timeout);
       setSession(session);
       setUser(session?.user ?? null);
       setLoading(false);
-      console.log('Auth: loading finished');
     }).catch(err => {
-      console.error('Auth error', err);
       clearTimeout(timeout);
       setLoading(false);
     });
