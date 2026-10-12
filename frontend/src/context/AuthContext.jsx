@@ -42,7 +42,6 @@ export const AuthProvider = ({ children }) => {
       return;
     }
     const fetchData = async () => {
-      // 1. Ambil profile
       const { data: profileData } = await supabase
        .from('profiles')
        .select('*')
@@ -51,7 +50,6 @@ export const AuthProvider = ({ children }) => {
 
       if (profileData) setProfile(profileData);
 
-      // 2. Ambil outlets
       const { data: outletsData } = await supabase
        .from('outlets')
        .select('*')
@@ -59,8 +57,8 @@ export const AuthProvider = ({ children }) => {
 
       if (outletsData && outletsData.length > 0) {
         setOutlets(outletsData);
-        // Jika belum ada active outlet, set ke outlet pertama atau outlet milik profile
-        if (!activeOutletId) {
+        const savedId = localStorage.getItem('activeOutletId');
+        if (!savedId) {
           const defaultId = profileData?.outlet_id || outletsData[0].id;
           setActiveOutletIdState(defaultId);
           localStorage.setItem('activeOutletId', defaultId);
@@ -68,9 +66,9 @@ export const AuthProvider = ({ children }) => {
       }
     };
     fetchData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
-  // Owner = role owner ATAU email kamu
   const isOwner = profile?.role === 'owner' || user?.email === 'siagas981@gmail.com' || user?.email === 'owner@qasir.com';
 
   const activeOutlet = outlets.find(o => o.id === activeOutletId) || outlets[0] || null;
