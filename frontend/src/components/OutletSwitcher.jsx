@@ -7,7 +7,7 @@ export function OutletSwitcher() {
   if (!isOwner) {
     return (
       <span data-testid="outlet-current-label" className="inline-flex items-center gap-1.5 text-sm font-semibold">
-        <MapPin className="h-4 w-4 text-emerald-600" /> {activeOutlet?.name || "Belum ada outlet"}
+        <MapPin className="h-4 w-4 text-emerald-600" /> {activeOutlet?.name || "Memuat outlet..."}
       </span>
     );
   }

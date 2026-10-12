@@ -1,0 +1,9 @@
+# Query: Belum ada outlet
+# ContextLines: 1
+
+1 result - 1 file
+
+frontend/src/components/OutletSwitcher.jsx:
+   9        <span data-testid="outlet-current-label" className="inline-flex items-center gap-1.5 text-sm font-semibold">
+  10:         <MapPin className="h-4 w-4 text-emerald-600" /> {activeOutlet?.name || "Memuat outlet..."}
+  11        </span>
