@@ -267,7 +267,8 @@ function ShiftTab({ outletId }) {
     try {
       const d = new Date(iso);
       if (isNaN(d.getTime())) return iso.slice(0, 5);
-      return d.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Makassar" });
+      const wita = new Date(d.getTime() + 8*60*60*1000);
+return `${String(wita.getUTCHours()).padStart(2,'0')}.${String(wita.getUTCMinutes()).padStart(2,'0')}`;
     } catch {
       return "-";
     }
