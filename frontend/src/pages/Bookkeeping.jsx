@@ -18,8 +18,11 @@ import { fetchExpenses, addExpense, deleteExpense, fetchProfitSummary, fetchProf
 import { PageHeader, RangeBar, ExportButtons, StatCard, TableShell, shortId, formatShort } from "@/components/reports/parts";
 import { supabase } from "@/lib/supabase/client";
 
+// === FIX WITA ===
+const getTodayWITA = () => new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Makassar" });
+
 const fetchShifts = async (outletId, from, to) => {
-  let q = supabase.from("shifts").select("*, profiles(full_name)").eq("outlet_id", outletId).order("tanggal", { ascending: false });
+  let q = supabase.from("shifts").select("*, profiles(full_name)").eq("outlet_id", outletId).order("created_at", { ascending: false });
   if (from) q = q.gte("tanggal", from);
   if (to) q = q.lte("tanggal", to);
   const { data, error } = await q;
@@ -27,15 +30,26 @@ const fetchShifts = async (outletId, from, to) => {
   return data;
 };
 
+// khusus untuk template: 1 karyawan = 1 shift terbaru saja
+const fetchShiftTemplates = async (outletId) => {
+  const { data, error } = await supabase.from("shifts").select("*, profiles(full_name)").eq("outlet_id", outletId).order("created_at", { ascending: false });
+  if (error) throw error;
+  const map = new Map();
+  for (const s of data || []) {
+    if (!map.has(s.employee_id)) map.set(s.employee_id, s);
+  }
+  return Array.from(map.values());
+};
+
 const fetchAttendance = async (outletId) => {
   if (!outletId) return [];
   const { data, error } = await supabase
-   .from("attendance_logs")
-   .select("*")
-   .eq("outlet_id", outletId)
-   .order("tanggal", { ascending: false })
-   .order("jam_asli_masuk", { ascending: false })
-   .limit(100);
+  .from("attendance_logs")
+  .select("*")
+  .eq("outlet_id", outletId)
+  .order("tanggal", { ascending: false })
+  .order("jam_asli_masuk", { ascending: false })
+  .limit(100);
   if (error) {
     console.error("ATT ERROR", error);
     return [];
@@ -47,10 +61,9 @@ const fetchAttendance = async (outletId) => {
 };
 
 const isWithinShift = (dateStr, shift) => {
-  if (!shift) return true;
+  if (!shift ||!dateStr) return true;
+  // dateStr bisa ISO atau tanggal saja, kita cek jamnya saja
   const d = new Date(dateStr);
-  const day = d.toISOString().split("T")[0];
-  if (day!== shift.tanggal) return false;
   const [h, m] = [d.getHours(), d.getMinutes()];
   const timeVal = h * 60 + m;
   const [hm1, mm1] = shift.jam_masuk.split(":").map(Number);
@@ -89,7 +102,7 @@ function IncomeTab({ outletId }) {
           <SelectTrigger className="w-[220px] h-8 bg-white"><SelectValue placeholder="Semua Jam" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Semua Jam</SelectItem>
-            {shifts.map((s) => <SelectItem key={s.id} value={s.id}>{s.tanggal} • {s.nama_shift} ({s.jam_masuk}-{s.jam_pulang}) • {s.profiles?.full_name}</SelectItem>)}
+            {shifts.map((s) => <SelectItem key={s.id} value={s.id}>{s.nama_shift} ({s.jam_masuk}-{s.jam_pulang}) • {s.profiles?.full_name}</SelectItem>)}
           </SelectContent>
         </Select>
         {activeShift && <Badge className="bg-slate-900 text-white">{activeShift.nama_shift} • {activeShift.jam_masuk}-{activeShift.jam_pulang}</Badge>}
@@ -148,7 +161,7 @@ function ExpenseTab({ outletId, userId }) {
   return (
     <div>
       <RangeBar range={range}><Button onClick={() => setOpen(true)} className="bg-rose-600 hover:bg-rose-700 text-white gap-1"><Plus className="h-4 w-4" /> Pengeluaran Manual</Button></RangeBar>
-      <div className="flex flex-wrap gap-2 mb-4 p-3 bg-slate-50 rounded-lg border"><span className="text-xs font-bold uppercase tracking-wider flex items-center gap-1"><Timer className="h-3 w-3" /> Filter Shift:</span><Select value={shiftId} onValueChange={setShiftId}><SelectTrigger className="w-[220px] h-8 bg-white"><SelectValue placeholder="Semua Jam" /></SelectTrigger><SelectContent><SelectItem value="all">Semua Jam</SelectItem>{shifts.map((s) => <SelectItem key={s.id} value={s.id}>{s.tanggal} • {s.nama_shift}</SelectItem>)}</SelectContent></Select></div>
+      <div className="flex flex-wrap gap-2 mb-4 p-3 bg-slate-50 rounded-lg border"><span className="text-xs font-bold uppercase tracking-wider flex items-center gap-1"><Timer className="h-3 w-3" /> Filter Shift:</span><Select value={shiftId} onValueChange={setShiftId}><SelectTrigger className="w-[220px] h-8 bg-white"><SelectValue placeholder="Semua Jam" /></SelectTrigger><SelectContent><SelectItem value="all">Semua Jam</SelectItem>{shifts.map((s) => <SelectItem key={s.id} value={s.id}>{s.nama_shift} • {s.jam_masuk}-{s.jam_pulang}</SelectItem>)}</SelectContent></Select></div>
       <div className="mb-5"><StatCard label="Total Pengeluaran" value={rupiah(total)} accent="rose" /></div>
       <TableShell><thead><tr className="border-b text-left text-xs uppercase tracking-wider text-muted-foreground"><th className="p-4">Tanggal</th><th className="p-4">Sumber</th><th className="p-4">Kategori</th><th className="p-4 text-right">Jumlah</th><th className="p-4"></th></tr></thead><tbody>{rows.map((r) => (<tr key={r.key} className="border-b hover:bg-slate-50"><td className="p-4">{r.dateLabel}</td><td className="p-4"><Badge variant="outline">{r.source}</Badge></td><td className="p-4 font-semibold">{r.label}</td><td className="p-4 text-right font-mono font-bold text-rose-600">{rupiah(r.amount)}</td><td className="p-4">{r.manual && <button onClick={() => onDelete(r.id)} className="p-2 rounded-md hover:bg-rose-600 hover:text-white"><Trash2 className="h-4 w-4" /></button>}</td></tr>))}</tbody></TableShell>
       <Dialog open={open} onOpenChange={setOpen}><DialogContent className="sm:max-w-md bg-background"><DialogHeader><DialogTitle>Tambah Pengeluaran Manual</DialogTitle><DialogDescription>Biaya operasional</DialogDescription></DialogHeader><ExpenseForm outletId={outletId} userId={userId} onDone={refresh} /></DialogContent></Dialog>
@@ -175,7 +188,6 @@ function ShiftTab({ outletId }) {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({
-    tanggal: new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Makassar" }),
     nama_shift: "Shift Pagi",
     jam_masuk: "08:00",
     jam_pulang: "16:00",
@@ -192,8 +204,8 @@ function ShiftTab({ outletId }) {
   });
 
   const { data: shifts = [], isLoading } = useQuery({
-    queryKey: ["shifts-manage", outletId],
-    queryFn: () => fetchShifts(outletId),
+    queryKey: ["shifts-template", outletId],
+    queryFn: () => fetchShiftTemplates(outletId),
     enabled:!!outletId,
   });
 
@@ -206,29 +218,31 @@ function ShiftTab({ outletId }) {
   const save = async (e) => {
     e.preventDefault();
     if (!form.employee_id) return toast.error("Pilih karyawan");
+
+    // FIX: 1 karyawan = 1 shift tetap. Hapus shift lama dulu baru insert baru
+    await supabase.from("shifts").delete().eq("outlet_id", outletId).eq("employee_id", form.employee_id);
+
     const { error } = await supabase.from("shifts").insert({
       outlet_id: outletId,
       employee_id: form.employee_id,
-      tanggal: form.tanggal,
+      tanggal: getTodayWITA(), // tetap simpan hari ini untuk histori, tapi tampilan tidak pakai tanggal
       nama_shift: form.nama_shift,
       jam_masuk: form.jam_masuk,
       jam_pulang: form.jam_pulang,
     });
     if (error) return toast.error(error.message);
-    toast.success("Shift disimpan");
+    toast.success("Shift tetap disimpan - berlaku otomatis tiap hari");
     setOpen(false);
-    qc.invalidateQueries({ queryKey: ["shifts-manage", outletId] });
+    qc.invalidateQueries({ queryKey: ["shifts-template", outletId] });
     qc.invalidateQueries({ queryKey: ["shifts", outletId] });
-    qc.invalidateQueries({ queryKey: ["attendance-logs", outletId] });
   };
 
-  const del = async (id) => {
-    if (!confirm("Hapus shift ini?")) return;
-    const { error } = await supabase.from("shifts").delete().eq("id", id);
+  const del = async (id, employee_id) => {
+    if (!confirm("Hapus shift tetap karyawan ini?")) return;
+    const { error } = await supabase.from("shifts").delete().eq("outlet_id", outletId).eq("employee_id", employee_id);
     if (error) return toast.error(error.message);
     toast.success("Shift dihapus");
-    qc.invalidateQueries({ queryKey: ["shifts-manage", outletId] });
-    qc.invalidateQueries({ queryKey: ["shifts", outletId] });
+    qc.invalidateQueries({ queryKey: ["shifts-template", outletId] });
   };
 
   const delAtt = async (id) => {
@@ -242,9 +256,10 @@ function ShiftTab({ outletId }) {
   const getStatusBadge = (log) => {
     if (!log.jam_asli_pulang) return <Badge className="bg-amber-100 text-amber-800 border-amber-200"><LogIn className="h-3 w-3 mr-1" /> Sedang Kerja</Badge>;
     const s = (log.status || "").toLowerCase();
-    if (s.includes("telat") || s.includes("kurang")) return <Badge className="bg-rose-100 text-rose-800 border-rose-200"><AlertTriangle className="h-3 w-3 mr-1" />{log.status}</Badge>;
+    if (s.includes("telat")) return <Badge className="bg-rose-100 text-rose-800 border-rose-200"><AlertTriangle className="h-3 w-3 mr-1" />{log.status}</Badge>;
+    if (s.includes("kurang")) return <Badge className="bg-orange-100 text-orange-800 border-orange-200"><AlertTriangle className="h-3 w-3 mr-1" />{log.status}</Badge>;
     if (s.includes("lembur") || s.includes("lebih")) return <Badge className="bg-emerald-100 text-emerald-800 border-emerald-200"><TrendingUp className="h-3 w-3 mr-1" />{log.status}</Badge>;
-    return <Badge className="bg-slate-100 text-slate-700"><CheckCircle className="h-3 w-3 mr-1" />{log.status || "Tepat"}</Badge>;
+    return <Badge className="bg-emerald-100 text-emerald-800 border-emerald-200"><CheckCircle className="h-3 w-3 mr-1" />{log.status || "Tepat"}</Badge>;
   };
 
   const formatTime = (iso) => {
@@ -262,26 +277,26 @@ function ShiftTab({ outletId }) {
     <div className="space-y-8">
       <div>
         <div className="flex justify-between items-center mb-4">
-          <div className="flex items-center gap-2"><Clock className="h-5 w-5" /><h3 className="font-bold">Kontrol Jam Shift Karyawan</h3></div>
+          <div className="flex items-center gap-2"><Clock className="h-5 w-5" /><h3 className="font-bold">Kontrol Jam Shift Karyawan (Template Tetap)</h3><Badge variant="outline" className="ml-2">Auto Berlaku Tiap Hari • {getTodayWITA()}</Badge></div>
           <Button onClick={() => setOpen(true)} className="bg-slate-900 text-white gap-1"><Plus className="h-4 w-4" /> Atur Shift</Button>
         </div>
         <TableShell>
-          <thead><tr className="border-b text-left text-xs uppercase tracking-wider text-muted-foreground"><th className="p-4">Tanggal</th><th className="p-4">Shift</th><th className="p-4">Karyawan</th><th className="p-4">Jam Masuk</th><th className="p-4">Jam Pulang</th><th className="p-4">Durasi</th><th className="p-4"></th></tr></thead>
+          <thead><tr className="border-b text-left text-xs uppercase tracking-wider text-muted-foreground"><th className="p-4">Karyawan</th><th className="p-4">Shift</th><th className="p-4">Jam Masuk</th><th className="p-4">Jam Pulang</th><th className="p-4">Durasi</th><th className="p-4"></th></tr></thead>
           <tbody>
-            {isLoading && <tr><td colSpan={7} className="p-4">Memuat...</td></tr>}
+            {isLoading && <tr><td colSpan={6} className="p-4">Memuat...</td></tr>}
             {shifts.map((s) => {
               const dur = (() => { const [h1, m1] = s.jam_masuk.split(":").map(Number); const [h2, m2] = s.jam_pulang.split(":").map(Number); let d = (h2 * 60 + m2) - (h1 * 60 + m1); if (d < 0) d += 1440; return `${Math.floor(d / 60)}j ${d % 60}m`; })();
-              return <tr key={s.id} className="border-b hover:bg-slate-50"><td className="p-4">{s.tanggal}</td><td className="p-4"><Badge className="bg-sky-100 text-sky-800">{s.nama_shift}</Badge></td><td className="p-4 font-semibold">{s.profiles?.full_name}</td><td className="p-4 font-mono">{s.jam_masuk}</td><td className="p-4 font-mono">{s.jam_pulang}</td><td className="p-4">{dur}</td><td className="p-4"><button onClick={() => del(s.id)} className="p-2 hover:bg-rose-600 hover:text-white rounded"><Trash2 className="h-4 w-4" /></button></td></tr>
+              return <tr key={s.id} className="border-b hover:bg-slate-50"><td className="p-4 font-semibold">{s.profiles?.full_name}</td><td className="p-4"><Badge className="bg-sky-100 text-sky-800">{s.nama_shift}</Badge></td><td className="p-4 font-mono">{s.jam_masuk} WITA</td><td className="p-4 font-mono">{s.jam_pulang} WITA</td><td className="p-4">{dur}</td><td className="p-4"><button onClick={() => del(s.id, s.employee_id)} className="p-2 hover:bg-rose-600 hover:text-white rounded"><Trash2 className="h-4 w-4" /></button></td></tr>
             })}
-            {shifts.length === 0 && <tr><td colSpan={7} className="p-8 text-center text-muted-foreground">Belum ada shift. Klik Atur Shift.</td></tr>}
+            {shifts.length === 0 && <tr><td colSpan={6} className="p-8 text-center text-muted-foreground">Belum ada shift. Klik Atur Shift. 1 Karyawan = 1 Shift Tetap.</td></tr>}
           </tbody>
         </TableShell>
       </div>
 
       <div className="rounded-xl border-2 border-slate-900 bg-white overflow-hidden">
         <div className="bg-slate-900 text-white p-4 flex justify-between items-center">
-          <div className="flex items-center gap-2"><Timer className="h-5 w-5" /><h3 className="font-bold">Absensi Otomatis - Realita vs Jadwal</h3></div>
-          <Badge className="bg-white text-slate-900">Auto dari Login</Badge>
+          <div className="flex items-center gap-2"><Timer className="h-5 w-5" /><h3 className="font-bold">Absensi Otomatis - {getTodayWITA()}</h3></div>
+          <Badge className="bg-white text-slate-900">Auto dari Login WITA</Badge>
         </div>
         <TableShell>
           <thead><tr className="border-b text-left text-xs uppercase tracking-wider text-muted-foreground"><th className="p-3">TGL</th><th className="p-3">KARYAWAN</th><th className="p-3">JADWAL</th><th className="p-3">MASUK ASLI</th><th className="p-3">PULANG ASLI</th><th className="p-3">DURASI REAL</th><th className="p-3">STATUS</th><th className="p-3"></th></tr></thead>
@@ -306,25 +321,25 @@ function ShiftTab({ outletId }) {
                 </tr>
               );
             })}
-            {attendance.length === 0 && <tr><td colSpan={8} className="p-8 text-center text-muted-foreground text-sm">Belum ada absensi di outlet ini.</td></tr>}
+            {attendance.length === 0 && <tr><td colSpan={8} className="p-8 text-center text-muted-foreground text-sm">Belum ada absensi di outlet ini untuk hari ini.</td></tr>}
           </tbody>
         </TableShell>
       </div>
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="sm:max-w-md bg-background">
-          <DialogHeader><DialogTitle>Atur Jam Shift</DialogTitle><DialogDescription>Tentukan jam kerja karyawan</DialogDescription></DialogHeader>
+          <DialogHeader><DialogTitle>Atur Jam Shift Tetap</DialogTitle><DialogDescription>Shift ini akan otomatis berlaku setiap hari untuk karyawan tersebut. Tidak perlu atur tanggal lagi.</DialogDescription></DialogHeader>
           <form onSubmit={save} className="space-y-3">
-            <div><Label>Tanggal</Label><Input type="date" value={form.tanggal} onChange={(e) => setForm({...form, tanggal: e.target.value })} required /></div>
+            <div><Label>Karyawan</Label><Select value={form.employee_id} onValueChange={(v) => setForm({...form, employee_id: v })}><SelectTrigger><SelectValue placeholder="Pilih Karyawan" /></SelectTrigger><SelectContent>{employees.map((e) => <SelectItem key={e.id} value={e.id}>{e.full_name}</SelectItem>)}</SelectContent></Select></div>
             <div className="grid grid-cols-2 gap-3">
-              <div><Label>Nama Shift</Label><Select value={form.nama_shift} onValueChange={(v) => setForm({...form, nama_shift: v })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="Shift Pagi">Shift Pagi</SelectItem><SelectItem value="Shift Sore">Shift Sore</SelectItem><SelectItem value="Shift Malam">Shift Malam</SelectItem></SelectContent></Select></div>
-              <div><Label>Karyawan</Label><Select value={form.employee_id} onValueChange={(v) => setForm({...form, employee_id: v })}><SelectTrigger><SelectValue placeholder="Pilih" /></SelectTrigger><SelectContent>{employees.map((e) => <SelectItem key={e.id} value={e.id}>{e.full_name}</SelectItem>)}</SelectContent></Select></div>
+              <div><Label>Nama Shift</Label><Select value={form.nama_shift} onValueChange={(v) => setForm({...form, nama_shift: v })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="Shift Pagi">Shift Pagi</SelectItem><SelectItem value="Shift Sore">Shift Sore</SelectItem><SelectItem value="Shift Malam">Shift Malam</SelectItem><SelectItem value="Shift 01-09">Shift 01-09</SelectItem><SelectItem value="Shift 09-17">Shift 09-17</SelectItem><SelectItem value="Shift 17-01">Shift 17-01</SelectItem></SelectContent></Select></div>
+              <div><Label>Hari ini WITA</Label><Input value={getTodayWITA()} disabled /></div>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <div><Label>Jam Masuk</Label><Input type="time" value={form.jam_masuk} onChange={(e) => setForm({...form, jam_masuk: e.target.value })} required /></div>
-              <div><Label>Jam Pulang</Label><Input type="time" value={form.jam_pulang} onChange={(e) => setForm({...form, jam_pulang: e.target.value })} required /></div>
+              <div><Label>Jam Masuk (WITA)</Label><Input type="time" value={form.jam_masuk} onChange={(e) => setForm({...form, jam_masuk: e.target.value })} required /></div>
+              <div><Label>Jam Pulang (WITA)</Label><Input type="time" value={form.jam_pulang} onChange={(e) => setForm({...form, jam_pulang: e.target.value })} required /></div>
             </div>
-            <Button type="submit" className="w-full bg-emerald-600 hover:bg-emerald-700 text-white h-11">Simpan Shift</Button>
+            <Button type="submit" className="w-full bg-emerald-600 hover:bg-emerald-700 text-white h-11">Simpan Shift Tetap</Button>
           </form>
         </DialogContent>
       </Dialog>
