@@ -11,7 +11,8 @@ import { CartPanel } from "@/components/pos/CartPanel";
 import { PayDialog } from "@/components/pos/PayDialog";
 import { ReceiptDialog } from "@/components/pos/ReceiptDialog";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
-
+import { useShift } from "@/hooks/useShift";
+import { ShiftStartModal } from "@/components/ShiftStartModal";
 export const fetchProducts = async (outletId) => {
   const { data, error } = await supabase.from("products").select("*").eq("outlet_id", outletId).order("name");
   if (error) throw error;
@@ -38,7 +39,7 @@ export default function POS() {
   const { user, activeOutletId, activeOutlet } = useAuth();
   const qc = useQueryClient();
   const key = ["products", activeOutletId];
-  const { data: products = [], isLoading } = useQuery({ queryKey: key, queryFn: () => fetchProducts(activeOutletId), enabled:!!activeOutletId, staleTime: 10_000 });
+  const { data: products = [], isLoading } = useQuery({ queryKey: key, queryFn: () => fetchProducts(activeOutletId), enabled: !!activeOutletId, staleTime: 10_000 });
   const cart = useCart(user?.id, activeOutletId);
   const [search, setSearch] = useState("");
   const [payOpen, setPayOpen] = useState(false);
@@ -48,6 +49,7 @@ export default function POS() {
   const [filterBrand, setFilterBrand] = useState("all");
   const [filterColl, setFilterColl] = useState("all");
   const { categories, brands, collections } = useMasters();
+  const shift = useShift(activeOutletId); // <-- TEMPELAN BARU DISINI
 
   const inCart = Object.fromEntries(cart.items.map((i) => [i.product_id, i.qty]));
   const stockOf = (id) => products.find((p) => p.id === id)?.stock?? 0;
@@ -91,9 +93,12 @@ export default function POS() {
   if (!activeOutletId) {
     return <div className="p-10 text-sm text-muted-foreground">Akun ini belum ditugaskan ke outlet. Hubungi owner.</div>;
   }
-
+  if (shift.loading) {
+    return <div className="p-10 text-sm text-muted-foreground">Loading shift...</div>;
+  }
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 lg:h-[calc(100vh-4rem)]">
+            <ShiftStartModal open={shift.needsInput} onSubmit={shift.startShift} loading={shift.loading} />
       <section className="lg:col-span-7 xl:col-span-8 lg:overflow-y-auto p-4 md:p-6">
         <div className="mb-5">
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-700">Kasir</p>
