@@ -98,7 +98,7 @@ export default function POS() {
   }
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 lg:h-[calc(100vh-4rem)]">
-            <ShiftStartModal open={shift.needsInput} onSubmit={shift.startShift} loading={shift.loading} />
+            <ShiftStartModal open={shift.needsInput} onSubmit={shift.startShift} loading={shift.loading} outletId={activeOutletId} />
       <section className="lg:col-span-7 xl:col-span-8 lg:overflow-y-auto p-4 md:p-6">
         <div className="mb-5">
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-700">Kasir</p>
