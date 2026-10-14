@@ -108,42 +108,53 @@ export const AuthProvider = ({ children }) => {
 
   // SIGNOUT BERSIH VERSI B - ADA TOTAL JAM + PULANG CEPAT
   const signOut = async () => {
-    try {
-      if (user && profile && profile.role!== 'owner') {
-        const today = getTodayWITA();
-        const { data: openLog } = await supabase.from('attendance_logs').select('*').eq('employee_id', user.id).eq('tanggal', today).is('jam_asli_pulang', null).order('jam_asli_masuk', { ascending: false }).limit(1).maybeSingle();
-        if (openLog) {
-          const now = new Date();
-          const masuk = new Date(openLog.jam_asli_masuk);
-          let durMenit = Math.floor((now - masuk) / 60000);
-          if (durMenit < 1) durMenit = 1;
-          let statusAkhir = openLog.status || 'Tepat';
+  try {
+    if (user && profile && profile.role!== 'owner') {
+      const today = getTodayWITA();
+      const { data: openLog } = await supabase.from('attendance_logs').select('*').eq('employee_id', user.id).eq('tanggal', today).is('jam_asli_pulang', null).order('jam_asli_masuk', { ascending: false }).limit(1).maybeSingle();
+      if (openLog) {
+        const now = new Date();
+        const masuk = new Date(openLog.jam_asli_masuk);
+        let durMenit = Math.floor((now - masuk) / 60000);
+        if (durMenit < 1) durMenit = 1;
 
-          if (openLog.jam_jadwal_pulang) {
-            const nowMin = getNowWITAMinutes();
-            const pulangMin = hmToMin(openLog.jam_jadwal_pulang);
-            const masukMin = hmToMin(openLog.jam_jadwal_masuk);
-            let nowAdj = nowMin; let pulangAdj = pulangMin;
-            const crossMidnight = pulangMin <= masukMin;
-            if (crossMidnight) {
-              pulangAdj = pulangMin + 1440;
-              if (nowMin < masukMin) nowAdj = nowMin + 1440;
-            }
-            const selisih = nowAdj - pulangAdj;
-            if (selisih < -60) statusAkhir += ` | Pulang Cepat ${Math.abs(selisih)}m`;
-            else if (selisih > 15) statusAkhir += ` | Lembur ${selisih}m`;
+        let statusAkhir = openLog.status || 'Tepat';
+        const jamKerja = `${Math.floor(durMenit/60)}j ${durMenit%60}m`;
 
-            const jamKerja = `${Math.floor(durMenit/60)}j ${durMenit%60}m`;
-            statusAkhir += ` | Kerja ${jamKerja}`;
+        // LOGIKA BARU: Kalau kerja cuma <10 menit, anggap Test, jangan hitung Pulang Cepat
+        if (durMenit < 10) {
+          statusAkhir = `Test - Kerja ${jamKerja}`;
+        } else if (openLog.jam_jadwal_pulang && openLog.jam_jadwal_masuk) {
+          const nowMin = getNowWITAMinutes();
+          const pulangMin = hmToMin(openLog.jam_jadwal_pulang);
+          const masukMin = hmToMin(openLog.jam_jadwal_masuk);
+          let nowAdj = nowMin; let pulangAdj = pulangMin;
+          const crossMidnight = pulangMin <= masukMin;
+          if (crossMidnight) {
+            pulangAdj = pulangMin + 1440;
+            if (nowMin < masukMin) nowAdj = nowMin + 1440;
           }
-          await supabase.from('attendance_logs').update({ jam_asli_pulang: now.toISOString(), durasi_asli_menit: durMenit, status: statusAkhir }).eq('id', openLog.id);
+          const jadwalDur = crossMidnight? (1440 - masukMin + pulangMin) : (pulangMin - masukMin);
+
+          // Hanya hitung pulang cepat kalau sudah kerja minimal 50% jadwal
+          if (nowAdj < pulangAdj - 15 && durMenit > jadwalDur * 0.5) {
+            statusAkhir += ` | Pulang Cepat ${pulangAdj - nowAdj}m`;
+          } else if (nowAdj > pulangAdj + 15) {
+            statusAkhir += ` | Lembur ${nowAdj - pulangAdj}m`;
+          }
+          statusAkhir += ` | Kerja ${jamKerja}`;
+        } else {
+          statusAkhir += ` | Kerja ${jamKerja}`;
         }
+
+        await supabase.from('attendance_logs').update({ jam_asli_pulang: now.toISOString(), durasi_asli_menit: durMenit, status: statusAkhir }).eq('id', openLog.id);
       }
-    } catch (e) { console.error(e); }
-    localStorage.removeItem('activeOutletId'); loggedTodayRef.current = false;
-    const { error } = await supabase.auth.signOut();
-    if (error) throw error;
-  };
+    }
+  } catch (e) { console.error(e); }
+  localStorage.removeItem('activeOutletId'); loggedTodayRef.current = false;
+  const { error } = await supabase.auth.signOut();
+  if (error) throw error;
+};
 
   const value = { user, session, loading, profile, outlets, activeOutlet, activeOutletId, setActiveOutletId, isOwner, signIn, signUp: async (e,p)=>{const {data,error}=await supabase.auth.signUp({email:e,password:p}); if(error) throw error; return data;}, signOut, login: signIn };
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
