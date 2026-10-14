@@ -29,7 +29,13 @@ export const AuthProvider = ({ children }) => {
   const [session, setSession] = useState(null);
   const [profile, setProfile] = useState(null);
   const [outlets, setOutlets] = useState([]);
-  const [activeOutletId, setActiveOutletIdState] = useState(() => localStorage.getItem('activeOutletId') || null);
+  const [activeOutletId, setActiveOutletIdState] = useState(() => {
+  try {
+    return localStorage.getItem('activeOutletId') || null;
+  } catch {
+    return null;
+  }
+});
   const loggedTodayRef = useRef(false);
   useEffect(() => {
     const timeout = setTimeout(() => setLoading(false), 5000);
@@ -84,7 +90,12 @@ export const AuthProvider = ({ children }) => {
   }, [user, profile, activeOutletId]);
   const isOwner = profile?.role === 'owner' || user?.email === 'siagas981@gmail.com' || user?.email === 'owner@qasir.com';
   const activeOutlet = outlets.find(o => o.id === activeOutletId) || outlets[0] || null;
-  const setActiveOutletId = (id) => { setActiveOutletIdState(id); localStorage.setItem('activeOutletId', id); };
+  const setActiveOutletId = (id) => {
+  setActiveOutletIdState(id);
+  try {
+    localStorage.setItem('activeOutletId', id);
+  } catch {}
+};
   const signIn = async (email, password) => { loggedTodayRef.current = false; const { data, error } = await supabase.auth.signInWithPassword({ email, password }); if (error) throw error; return data; };
   const signOut = async () => {
     try {
