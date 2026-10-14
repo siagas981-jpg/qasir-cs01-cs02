@@ -37,15 +37,30 @@ export const AuthProvider = ({ children }) => {
   const loggedTodayRef = useRef(false);
 
   useEffect(() => {
-    const timeout = setTimeout(() => setLoading(false), 5000);
-    supabase.auth.getSession().then(({ data: { session } }) => { clearTimeout(timeout); setSession(session); setUser(session?.user?? null); setLoading(false); });
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => { setSession(session); setUser(session?.user?? null); setLoading(false); });
-    return () => { clearTimeout(timeout); subscription.unsubscribe(); };
-  }, []);
+  let mounted = true;
+  const init = async () => {
+    // jangan matikan loading dulu
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!mounted) return;
+    setSession(session);
+    setUser(session?.user?? null);
+    // loading akan dimatikan di useEffect kedua (yang fetch profile & outlet), bukan di sini
+  };
+  init();
+  const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    setSession(session);
+    setUser(session?.user?? null);
+    if (!session) {
+      setLoading(false); // kalau logout, baru matikan loading
+    }
+  });
+  return () => { mounted = false; subscription.unsubscribe(); };
+}, []);
 
   useEffect(() => {
-    if (!user) { setProfile(null); return; }
-    const fetchData = async () => {
+  if (!user) { setProfile(null); return; }
+  const fetchData = async () => {
+    try {
       const { data: profileData } = await supabase.from('profiles').select('*').eq('id', user.id).single();
       if (profileData) setProfile(profileData);
       const { data: outletsData } = await supabase.from('outlets').select('*').order('name');
@@ -58,9 +73,12 @@ export const AuthProvider = ({ children }) => {
           localStorage.setItem('activeOutletId', defaultId);
         }
       }
-    };
-    fetchData();
-  }, [user]);
+    } finally {
+      setLoading(false); // BARU MATIKAN DI SINI
+    }
+  };
+  fetchData();
+}, [user]);
 
   // SATU-SATUNYA TEMPAT CATAT MASUK - HAPUS DUPLICATE DI SIGNIN
   useEffect(() => {
