@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { getCurrentShift, getShiftLabel } from '@/hooks/useShift';
 
-export default function ShiftStartModal({ isOpen, onSubmit, outletBanks }) {
+export default function ShiftStartModal({ open, isOpen, onSubmit, loading }) {
+  const show = open || isOpen;
   const currentShift = getCurrentShift();
-  const [form, setForm] = useState({ LACI_1: '', LACI_2: '', BCA: '', BRI: '', DANA: '' });
+  const [form, setForm] = useState({ LACI_1: '200000', LACI_2: '0', BCA: '0', BRI: '0', DANA: '0' });
 
-  if (!isOpen) return null;
+  if (!show) return null;
 
   return (
     <div className="fixed inset-0 bg-black/70 z-[9999] flex items-center justify-center p-4">
@@ -17,27 +18,31 @@ export default function ShiftStartModal({ isOpen, onSubmit, outletBanks }) {
 
         {currentShift === 1? (
           <div className="space-y-3">
-            <label className="block">Laci 1 - Jualan
-              <input type="number" className="w-full border p-2 rounded" value={form.LACI_1} onChange={e=>setForm({...form, LACI_1:e.target.value})} placeholder="Rp 0" />
+            <label className="block text-sm">Laci 1 - Jualan
+              <input type="number" className="w-full border p-2 rounded mt-1" value={form.LACI_1} onChange={e=>setForm({...form, LACI_1:e.target.value})} />
             </label>
-            <label className="block">Laci 2 - Cadangan/Titipan
-              <input type="number" className="w-full border p-2 rounded" value={form.LACI_2} onChange={e=>setForm({...form, LACI_2:e.target.value})} placeholder="Rp 0" />
+            <label className="block text-sm">Laci 2 - Cadangan
+              <input type="number" className="w-full border p-2 rounded mt-1" value={form.LACI_2} onChange={e=>setForm({...form, LACI_2:e.target.value})} />
             </label>
-            <label className="block">BCA
-              <input type="number" className="w-full border p-2 rounded" value={form.BCA} onChange={e=>setForm({...form, BCA:e.target.value})} />
+            <label className="block text-sm">BCA
+              <input type="number" className="w-full border p-2 rounded mt-1" value={form.BCA} onChange={e=>setForm({...form, BCA:e.target.value})} />
             </label>
-            <label className="block">BRI
-              <input type="number" className="w-full border p-2 rounded" value={form.BRI} onChange={e=>setForm({...form, BRI:e.target.value})} />
+            <label className="block text-sm">BRI
+              <input type="number" className="w-full border p-2 rounded mt-1" value={form.BRI} onChange={e=>setForm({...form, BRI:e.target.value})} />
             </label>
-            <label className="block">DANA
-              <input type="number" className="w-full border p-2 rounded" value={form.DANA} onChange={e=>setForm({...form, DANA:e.target.value})} />
+            <label className="block text-sm">DANA
+              <input type="number" className="w-full border p-2 rounded mt-1" value={form.DANA} onChange={e=>setForm({...form, DANA:e.target.value})} />
             </label>
-            <button onClick={()=>onSubmit(form)} className="w-full bg-black text-white py-3 rounded-lg mt-4">Simpan & Mulai Jualan</button>
+            <button disabled={loading} onClick={()=>onSubmit(form)} className="w-full bg-black text-white py-3 rounded-lg mt-4 disabled:opacity-50">
+              {loading? 'Menyimpan...' : 'Simpan & Mulai Jualan'}
+            </button>
           </div>
         ) : (
           <div className="text-center py-6">
-            <p>Saldo otomatis dari Sift {currentShift-1}</p>
-            <button onClick={()=>onSubmit(null)} className="w-full bg-black text-white py-3 rounded-lg mt-4">Mulai Sift {currentShift}</button>
+            <p className="text-sm">Saldo otomatis dari Sift {currentShift-1}</p>
+            <button disabled={loading} onClick={()=>onSubmit(null)} className="w-full bg-black text-white py-3 rounded-lg mt-4">
+              Mulai Sift {currentShift}
+            </button>
           </div>
         )}
       </div>
