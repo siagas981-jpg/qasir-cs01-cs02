@@ -11,7 +11,7 @@ import { CartPanel } from "@/components/pos/CartPanel";
 import { PayDialog } from "@/components/pos/PayDialog";
 import { ReceiptDialog } from "@/components/pos/ReceiptDialog";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
-import useShift from "@/hooks/useShift";
+import { useShift } from "@/hooks/useShift";
 import { ShiftStartModal } from "@/components/ShiftStartModal";
 export const fetchProducts = async (outletId) => {
   const { data, error } = await supabase.from("products").select("*").eq("outlet_id", outletId).order("name");
