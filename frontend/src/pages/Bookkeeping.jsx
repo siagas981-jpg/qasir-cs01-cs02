@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
-import { Plus, Wallet, Receipt, TrendingUp, Clock, Timer } from "lucide-react";
+import { Plus, Wallet, Receipt, TrendingUp, Clock, Timer, UserCheck } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from "recharts";
 import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
@@ -49,17 +49,26 @@ const isTimeInShift = (dateStr, shift) => {
   if(e<=s) return cur>=s || cur<e; return cur>=s && cur<e;
 };
 
-const fetchShifts = async (outletId, from, to) => {
-  let q = supabase.from("shifts").select("*, profiles(full_name)").eq("outlet_id", outletId).order("created_at", { ascending: false });
-  if (from) q = q.gte("tanggal", from); if (to) q = q.lte("tanggal", to);
-  const { data, error } = await q; if (error) throw error; return data;
-};
 const fetchShiftTemplates = async (outletId) => {
   const { data, error } = await supabase.from("shifts").select("*, profiles(full_name)").eq("outlet_id", outletId).order("created_at", { ascending: false });
   if (error) throw error; const map=new Map(); for(const s of data||[]){ if(!map.has(s.employee_id)) map.set(s.employee_id,s); } return Array.from(map.values());
 };
-const fetchAttendance = async (outletId) => {
-  if (!outletId) return []; const { data } = await supabase.from("attendance_logs").select("*").eq("outlet_id", outletId).order("tanggal", { ascending: false }).limit(100);
+
+const fetchAttendanceToday = async (outletId) => {
+  if (!outletId) return [];
+  const today = getTodayWITA();
+  const { data, error } = await supabase.from("attendance_logs")
+   .select("*, profiles(full_name)")
+   .eq("outlet_id", outletId)
+   .eq("tanggal", today)
+   .order("jam_masuk", { ascending: true });
+  if (error) throw error;
+  return (data||[]).filter(l=>!l.employee_name?.toLowerCase().includes("owner") &&!l.profiles?.full_name?.toLowerCase().includes("owner"));
+};
+
+const fetchAttendanceAll = async (outletId) => {
+  if (!outletId) return [];
+  const { data } = await supabase.from("attendance_logs").select("*, profiles(full_name)").eq("outlet_id", outletId).order("tanggal", { ascending: false }).limit(100);
   return (data||[]).filter(l=>!l.employee_name?.toLowerCase().includes("owner"));
 };
 
@@ -75,6 +84,7 @@ function IncomeTab({ outletId }) {
   <StatCard label="Total Pemasukan" value={rupiah(total)} accent="emerald" />
   <TableShell><thead><tr className="text-xs"><th className="p-4">Tanggal</th><th className="p-4">Nota</th><th className="p-4 text-right">Jumlah</th></tr></thead><tbody>{filtered.map(r=><tr key={r.id} className="border-b"><td className="p-4">{dateTime(r.created_at)}</td><td className="p-4">{shortId(r.id)}</td><td className="p-4 text-right font-bold">{rupiah(r.total)}</td></tr>)}</tbody></TableShell></div>);
 }
+
 function ExpenseTab({ outletId, userId }) {
   const range = useDateRange("all"); const qc=useQueryClient(); const [open,setOpen]=useState(false); const [shiftId,setShiftId]=useState("all");
   const { data:purchases=[] } = useQuery({ queryKey:["bk-purch",outletId,range.from,range.to], queryFn:()=>fetchPurchases(outletId,range.from,range.to), enabled:!!outletId });
@@ -116,9 +126,58 @@ function ShiftTab({ outletId }) {
   <Dialog open={open} onOpenChange={setOpen}><DialogContent className="bg-background"><DialogHeader><DialogTitle>Atur Shift</DialogTitle></DialogHeader><form onSubmit={save} className="space-y-3"><div><Label>Karyawan</Label><Select value={form.employee_id} onValueChange={v=>setForm({...form,employee_id:v})}><SelectTrigger><SelectValue placeholder="Karyawan" /></SelectTrigger><SelectContent>{employees.map(e=><SelectItem key={e.id} value={e.id}>{e.full_name}</SelectItem>)}</SelectContent></Select></div><div className="grid grid-cols-2 gap-3"><div><Label>Nama Shift</Label><Select value={form.nama_shift} onValueChange={v=>setForm({...form,nama_shift:v})}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="Shift Pagi">Shift Pagi (09-17)</SelectItem><SelectItem value="Shift Sore">Shift Sore (17-01)</SelectItem><SelectItem value="Shift Malam">Shift Malam (01-09)</SelectItem></SelectContent></Select></div><div><Label>Jam Masuk</Label><Input type="time" value={form.jam_masuk} onChange={e=>setForm({...form,jam_masuk:e.target.value})} /></div><div><Label>Jam Pulang</Label><Input type="time" value={form.jam_pulang} onChange={e=>setForm({...form,jam_pulang:e.target.value})} /></div></div><Button type="submit" className="w-full">Simpan</Button></form></DialogContent></Dialog></div>);
 }
 
+function AttendanceTab({ outletId }) {
+  const [timeNow, setTimeNow] = useState("");
+  useEffect(() => {
+    const i = setInterval(() => setTimeNow(new Date().toLocaleTimeString("id-ID", { timeZone: "Asia/Makassar" })), 1000);
+    return () => clearInterval(i);
+  }, []);
+  const { data: todayLogs = [], isLoading } = useQuery({ queryKey: ["attendance-today", outletId], queryFn: () => fetchAttendanceToday(outletId), enabled:!!outletId, refetchInterval: 10000 });
+  const { data: allLogs = [] } = useQuery({ queryKey: ["attendance-all", outletId], queryFn: () => fetchAttendanceAll(outletId), enabled:!!outletId });
+
+  return (
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <h3 className="font-bold flex items-center gap-2"><UserCheck className="h-5 w-5" /> Absensi Hari Ini - {getTodayWITA()} <Badge variant="outline" className="ml-2">{timeNow} WITA</Badge></h3>
+        <Badge className="bg-emerald-600 text-white">{todayLogs.length} Hadir Hari Ini</Badge>
+      </div>
+
+      <TableShell>
+        <thead><tr className="text-xs"><th className="p-4">Karyawan</th><th className="p-4 text-center">Jam Masuk Real</th><th className="p-4 text-center">Jam Pulang Real</th><th className="p-4 text-center">Status</th><th className="p-4 text-center">Durasi</th></tr></thead>
+        <tbody>
+          {isLoading? <tr><td colSpan={5} className="p-6 text-center">Loading absensi...</td></tr> :
+           todayLogs.length === 0? <tr><td colSpan={5} className="p-6 text-center text-gray-500">Belum ada yang absen hari ini</td></tr> :
+           todayLogs.map((log) => {
+            const masuk = log.jam_masuk || log.check_in || "-";
+            const pulang = log.jam_pulang || log.check_out || "-";
+            const durasi = masuk!== "-" && pulang!== "-"? (()=>{ try{ const [h1,m1]=masuk.split(":").map(Number); const [h2,m2]=pulang.split(":").map(Number); let d=(h2*60+m2)-(h1*60+m1); if(d<0) d+=24*60; return `${Math.floor(d/60)}j ${d%60}m`; }catch{return "-";} })() : "-";
+            return (
+              <tr key={log.id} className="border-b">
+                <td className="p-4 font-medium">{log.profiles?.full_name || log.employee_name || "-"}</td>
+                <td className="p-4 text-center font-mono font-bold text-emerald-700">{masuk}</td>
+                <td className="p-4 text-center font-mono">{pulang}</td>
+                <td className="p-4 text-center"><Badge className={log.status==='terlambat'? 'bg-amber-500' : 'bg-emerald-100 text-emerald-700'}>{log.status || 'Hadir'}</Badge></td>
+                <td className="p-4 text-center text-xs">{durasi}</td>
+              </tr>
+            );
+           })}
+        </tbody>
+      </TableShell>
+
+      <div className="mt-8">
+        <h4 className="font-semibold mb-3 text-sm text-gray-600">Riwayat 7 Hari Terakhir</h4>
+        <TableShell>
+          <thead><tr className="text-xs"><th className="p-3">Tanggal</th><th className="p-3">Karyawan</th><th className="p-3">Masuk</th><th className="p-3">Pulang</th></tr></thead>
+          <tbody>{allLogs.slice(0,20).map(l=><tr key={l.id} className="border-b text-xs"><td className="p-3">{l.tanggal}</td><td className="p-3">{l.profiles?.full_name || l.employee_name}</td><td className="p-3">{l.jam_masuk || "-"}</td><td className="p-3">{l.jam_pulang || "-"}</td></tr>)}</tbody>
+        </TableShell>
+      </div>
+    </div>
+  );
+}
+
 export default function Bookkeeping() {
   const { activeOutletId, activeOutlet, user } = useAuth();
   return (<div className="p-4 md:p-8 max-w-6xl"><PageHeader outlet={activeOutlet} title="Pembukuan" subtitle="Filter shift: Pagi 09-17, Sore 17-01, Malam 01-09" />
-  <Tabs defaultValue="income"><TabsList className="mb-6"><TabsTrigger value="income"><Wallet className="h-4 w-4 mr-1.5" /> Pemasukan</TabsTrigger><TabsTrigger value="expense"><Receipt className="h-4 w-4 mr-1.5" /> Pengeluaran</TabsTrigger><TabsTrigger value="profit"><TrendingUp className="h-4 w-4 mr-1.5" /> Laba Rugi</TabsTrigger><TabsTrigger value="shift"><Clock className="h-4 w-4 mr-1.5" /> Shift</TabsTrigger></TabsList>
-  <TabsContent value="income"><IncomeTab outletId={activeOutletId} /></TabsContent><TabsContent value="expense"><ExpenseTab outletId={activeOutletId} userId={user?.id} /></TabsContent><TabsContent value="profit"><ProfitTab outletId={activeOutletId} /></TabsContent><TabsContent value="shift"><ShiftTab outletId={activeOutletId} /></TabsContent></Tabs></div>);
+  <Tabs defaultValue="shift"><TabsList className="mb-6 flex-wrap h-auto"><TabsTrigger value="income"><Wallet className="h-4 w-4 mr-1.5" /> Pemasukan</TabsTrigger><TabsTrigger value="expense"><Receipt className="h-4 w-4 mr-1.5" /> Pengeluaran</TabsTrigger><TabsTrigger value="profit"><TrendingUp className="h-4 w-4 mr-1.5" /> Laba Rugi</TabsTrigger><TabsTrigger value="shift"><Clock className="h-4 w-4 mr-1.5" /> Shift</TabsTrigger><TabsTrigger value="attendance" className="data-[state=active]:bg-black data-[state=active]:text-white"><UserCheck className="h-4 w-4 mr-1.5" /> Absensi</TabsTrigger></TabsList>
+  <TabsContent value="income"><IncomeTab outletId={activeOutletId} /></TabsContent><TabsContent value="expense"><ExpenseTab outletId={activeOutletId} userId={user?.id} /></TabsContent><TabsContent value="profit"><ProfitTab outletId={activeOutletId} /></TabsContent><TabsContent value="shift"><ShiftTab outletId={activeOutletId} /></TabsContent><TabsContent value="attendance"><AttendanceTab outletId={activeOutletId} /></TabsContent></Tabs></div>);
 }
