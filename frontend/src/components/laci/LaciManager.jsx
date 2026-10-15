@@ -11,13 +11,22 @@ export default function LaciManager({ outletId }) {
   const [transfer, setTransfer] = useState({ dari: "", ke: "", jumlah: "" })
 
   const fetchLaci = useCallback(async () => {
-    if (!outletId) return
+    if (!outletId) {
+      console.log("LaciManager: outletId masih kosong");
+      return
+    }
     setLoading(true)
-    const { data } = await supabase
-     .from("laci")
-     .select("*")
-     .eq("outlet_id", outletId)
-     .order("kode", { ascending: true })
+    console.log("LaciManager FETCH untuk outletId:", outletId);
+    const { data, error } = await supabase
+    .from("laci")
+    .select("*")
+    .eq("outlet_id", outletId)
+    .order("kode", { ascending: true })
+
+    if (error) {
+      console.error("LaciManager ERROR:", error);
+    }
+    console.log("LaciManager RESULT:", data);
     setLaci(data || [])
     setLoading(false)
   }, [outletId])
@@ -37,6 +46,8 @@ export default function LaciManager({ outletId }) {
       setNewNama("")
       setShowAdd(false)
       fetchLaci()
+    } else {
+      alert(error.message)
     }
   }
 
@@ -48,10 +59,12 @@ export default function LaciManager({ outletId }) {
 
     const laciDari = laci.find(l => l.id === dari)
     const laciKe = laci.find(l => l.id === ke)
-    if (laciDari.saldo < jml) return alert("Saldo tidak cukup")
+    if (!laciDari ||!laciKe) return alert("Laci tidak ditemukan")
+    if (Number(laciDari.saldo) < jml) return alert("Saldo tidak cukup")
 
-    await supabase.from("laci").update({ saldo: laciDari.saldo - jml }).eq("id", dari)
-    await supabase.from("laci").update({ saldo: laciKe.saldo + jml }).eq("id", ke)
+    const { error: e1 } = await supabase.from("laci").update({ saldo: Number(laciDari.saldo) - jml }).eq("id", dari)
+    const { error: e2 } = await supabase.from("laci").update({ saldo: Number(laciKe.saldo) + jml }).eq("id", ke)
+    if (e1 || e2) return alert((e1||e2).message)
 
     await supabase.from("laci_mutasi").insert({
       outlet_id: outletId,
@@ -67,17 +80,21 @@ export default function LaciManager({ outletId }) {
     fetchLaci()
   }
 
-  if (!outletId) return <div className="p-4 text-sm opacity-60">Pilih outlet dulu...</div>
-  if (loading) return <div className="p-4 text-sm">Memuat laci...</div>
+  if (!outletId) return <div className="p-4 text-sm opacity-60">Pilih outlet dulu... (outletId kosong)</div>
+  if (loading) return <div className="p-4 text-sm">Memuat laci untuk {outletId}...</div>
 
+  // FIX UTAMA: parent_id bisa null, undefined, atau "" - anggap induk jika falsy
+  const laciInduk = laci.filter(l =>!l.parent_id)
   const laci5 = laci.find(l => l.kode === 'LACI_5')
   const anakLaci5 = laci5? laci.filter(l => l.parent_id === laci5.id) : []
-  const laciInduk = laci.filter(l =>!l.parent_id)
+
+  // Fallback: kalau filter induk gagal, tampilkan semua biar tidak kosong
+  const displayList = laciInduk.length > 0? laciInduk : laci.filter(l => ['LACI_1','LACI_2','LACI_5'].includes(l.kode))
 
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
-        <h3 className="font-bold text-base">Manajemen Laci - Outlet</h3>
+        <h3 className="font-bold text-base">Manajemen Laci - {outletId.slice(0,8)}... ({laci.length} laci)</h3>
         <div className="flex gap-2">
           <button onClick={() => setShowTransfer(true)} className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold">Transfer Laci 1 ↔ 2</button>
           <button onClick={() => setShowAdd(true)} className="px-3 py-1.5 bg-black text-white rounded-lg text-xs font-bold">+ Tambah Laci</button>
@@ -85,9 +102,9 @@ export default function LaciManager({ outletId }) {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-        {laciInduk.map(item => (
+        {displayList.map(item => (
           <div key={item.id} className="border rounded-xl p-3 bg-white shadow-sm">
-            <div className="text-[10px] tracking-widest opacity-60">{item.kode} • {item.jenis.toUpperCase()}</div>
+            <div className="text-[10px] tracking-widest opacity-60">{item.kode} • {item.jenis?.toUpperCase()} • {item.outlet_id.slice(0,8)}</div>
             <div className="font-bold text-sm mt-1">{item.nama}</div>
             <div className="text-xl font-black mt-2">Rp {Number(item.saldo).toLocaleString("id-ID")}</div>
             {item.kode === 'LACI_5' && (
@@ -103,7 +120,11 @@ export default function LaciManager({ outletId }) {
             )}
           </div>
         ))}
-        {laciInduk.length === 0 && <div className="col-span-2 p-6 text-center text-xs opacity-50 border rounded-xl">Belum ada laci. Jalankan SQL seed Laci 1,2,5 atau klik + Tambah Laci</div>}
+        {displayList.length === 0 && (
+          <div className="col-span-2 p-6 text-center text-xs opacity-50 border rounded-xl">
+            Belum ada laci untuk outlet {outletId}. Data total di DB: {laci.length}. Cek console log.
+          </div>
+        )}
       </div>
 
       {showAdd && (
