@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useEffect, useState, useCallback } from "react"
 import { supabase } from "@/lib/supabase/client"
 
 export default function LaciManager({ outletId }) {
@@ -10,7 +10,7 @@ export default function LaciManager({ outletId }) {
   const [newJenis, setNewJenis] = useState("cash")
   const [transfer, setTransfer] = useState({ dari: "", ke: "", jumlah: "" })
 
-  const fetchLaci = async () => {
+  const fetchLaci = useCallback(async () => {
     if (!outletId) return
     setLoading(true)
     const { data } = await supabase
@@ -20,9 +20,9 @@ export default function LaciManager({ outletId }) {
      .order("kode", { ascending: true })
     setLaci(data || [])
     setLoading(false)
-  }
+  }, [outletId])
 
-  useEffect(() => { fetchLaci() }, [outletId])
+  useEffect(() => { fetchLaci() }, [fetchLaci])
 
   const handleAddLaci = async () => {
     if (!newNama ||!outletId) return
@@ -50,11 +50,9 @@ export default function LaciManager({ outletId }) {
     const laciKe = laci.find(l => l.id === ke)
     if (laciDari.saldo < jml) return alert("Saldo tidak cukup")
 
-    // 1. Update saldo
     await supabase.from("laci").update({ saldo: laciDari.saldo - jml }).eq("id", dari)
     await supabase.from("laci").update({ saldo: laciKe.saldo + jml }).eq("id", ke)
 
-    // 2. Catat mutasi jika tabel ada
     await supabase.from("laci_mutasi").insert({
       outlet_id: outletId,
       dari_laci_id: dari,
