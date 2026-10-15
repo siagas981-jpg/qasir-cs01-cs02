@@ -127,7 +127,7 @@ export const AuthProvider = ({ children }) => {
   // SIGNOUT BERSIH VERSI B - ADA TOTAL JAM + PULANG CEPAT
   const signOut = async () => {
   try {
-    if (user && profile && profile.role!== 'owner') {
+    if (user && profile && profile.role !== 'owner') {
       const today = getTodayWITA();
       const { data: openLog } = await supabase.from('attendance_logs').select('*').eq('employee_id', user.id).eq('tanggal', today).is('jam_asli_pulang', null).order('jam_asli_masuk', { ascending: false }).limit(1).maybeSingle();
       if (openLog) {
