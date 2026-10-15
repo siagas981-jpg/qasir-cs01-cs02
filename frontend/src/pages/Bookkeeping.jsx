@@ -87,20 +87,79 @@ function ShiftTab({ outletId }) {
 function AttendanceTab({ outletId }) {
   const [timeNow, setTimeNow] = useState("");
   useEffect(() => { const i = setInterval(() => setTimeNow(new Date().toLocaleTimeString("id-ID", { timeZone: "Asia/Makassar" })), 1000); return () => clearInterval(i); }, []);
-  const { data: allLogs = [], isLoading } = useQuery({ 
-    queryKey: ["attendance-all", outletId], 
+  const { data: allLogs = [], isLoading } = useQuery({
+    queryKey: ["attendance-all", outletId],
     queryFn: async () => {
       if(!outletId) return [];
       const { data } = await supabase.from("attendance_logs").select("*").eq("outlet_id", outletId).order("jam_asli_masuk",{ascending:false}).limit(100);
       return data||[];
-    }, 
-    enabled:!!outletId, 
-    refetchInterval: 5000 
+    },
+    enabled:!!outletId,
+    refetchInterval: 3000
   });
   const todayStr = getTodayWITA();
   const todayLogs = allLogs.filter(l => l.tanggal === todayStr || (l.jam_asli_masuk && new Date(l.jam_asli_masuk).toLocaleDateString('en-CA',{timeZone:'Asia/Makassar'})===todayStr));
-  const fmt = (v) => !v ? "-" : new Date(v).toLocaleTimeString('id-ID',{hour12:false, timeZone:'Asia/Makassar'});
-  return (<div className="space-y-6"><div className="flex justify-between items-center"><h3 className="font-bold flex items-center gap-2"><UserCheck className="h-5 w-5" /> Absensi Hari Ini - {todayStr} <Badge variant="outline" className="ml-2">{timeNow} WITA</Badge></h3><Badge className="bg-emerald-600 text-white">{todayLogs.length} Hadir Hari Ini</Badge></div><TableShell><thead><tr className="text-xs"><th className="p-4">Karyawan</th><th className="p-4">Shift</th><th className="p-4 text-center">Jam Jadwal</th><th className="p-4 text-center">Masuk</th><th className="p-4 text-center">Pulang</th><th className="p-4 text-center">Status / Kerja</th></tr></thead><tbody>{isLoading? <tr><td colSpan={6} className="p-6 text-center">Loading...</td></tr> : todayLogs.length === 0? <tr><td colSpan={6} className="p-6 text-center text-gray-500">Belum ada yang absen hari ini</td></tr> : todayLogs.map((log) => (<tr key={log.id} className="border-b"><td className="p-4 font-medium">{log.employee_name}</td><td className="p-4">{log.shift_name}</td><td className="p-4 text-center">{log.jam_jadwal_masuk}</td><td className="p-4 text-center font-mono font-bold text-emerald-700">{fmt(log.jam_asli_masuk)}</td><td className="p-4 text-center font-mono font-bold text-red-600">{fmt(log.jam_asli_pulang)}</td><td className="p-4 text-center"><Badge className={log.status?.startsWith('Test')? 'bg-gray-200 text-gray-600' : 'bg-emerald-100 text-emerald-700'}>{log.status || 'Hadir'}</Badge></td></tr>))}</tbody></TableShell></div>);
+  const fmt = (v) =>!v? "-" : new Date(v).toLocaleTimeString('id-ID',{hour12:false, timeZone:'Asia/Makassar'});
+  const getStatusBadge = (log) => {
+    const s = log.status || 'Hadir';
+    if (s.includes('Pulang Cepat')) return { label: s, color: 'bg-amber-100 text-amber-700 border-amber-200' };
+    if (s.includes('Lembur')) return { label: s, color: 'bg-blue-100 text-blue-700 border-blue-200' };
+    if (s.startsWith('Test')) {
+      const kerja = s.match(/Kerja.*/)?.[0] || '';
+      return { label: `Hadir • ${kerja}`, color: 'bg-slate-100 text-slate-700' };
+    }
+    if (s.includes('Telat')) return { label: s, color: 'bg-red-100 text-red-700 border-red-200' };
+    return { label: s, color: 'bg-emerald-100 text-emerald-700 border-emerald-200' };
+  };
+  const getKerja = (log) => {
+    if (log.durasi_asli_menit) {
+      const j = Math.floor(log.durasi_asli_menit / 60);
+      const m = log.durasi_asli_menit % 60;
+      return `${j>0? j+'j ' : ''}${m}m`;
+    }
+    if (!log.jam_asli_pulang) return 'Sedang Kerja';
+    return '-';
+  };
+  return (
+    <div className="space-y-6">
+      <div className="flex justify-between items-center flex-wrap gap-2">
+        <h3 className="font-bold flex items-center gap-2"><UserCheck className="h-5 w-5" /> Absensi Hari Ini - {todayStr} <Badge variant="outline" className="ml-2">{timeNow} WITA</Badge></h3>
+        <Badge className="bg-emerald-600 text-white">{todayLogs.length} Hadir Hari Ini</Badge>
+      </div>
+      <TableShell>
+        <thead>
+          <tr className="text-xs bg-slate-50">
+            <th className="p-4 text-left">Karyawan</th>
+            <th className="p-4 text-left">Shift</th>
+            <th className="p-4 text-center">Jadwal</th>
+            <th className="p-4 text-center">Masuk (Otomatis)</th>
+            <th className="p-4 text-center">Pulang (Otomatis)</th>
+            <th className="p-4 text-center">Total Kerja</th>
+            <th className="p-4 text-center">Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {isLoading? <tr><td colSpan={7} className="p-6 text-center">Loading...</td></tr>
+          : todayLogs.length === 0? <tr><td colSpan={7} className="p-6 text-center text-gray-500">Belum ada yang absen hari ini - Login otomatis akan tercatat di sini</td></tr>
+          : todayLogs.map((log) => {
+            const badge = getStatusBadge(log);
+            return (
+              <tr key={log.id} className="border-b hover:bg-slate-50">
+                <td className="p-4 font-medium">{log.employee_name}</td>
+                <td className="p-4"><Badge variant="outline">{log.shift_name}</Badge></td>
+                <td className="p-4 text-center text-xs">{log.jam_jadwal_masuk || '-'} - {log.jam_jadwal_pulang || '-'}</td>
+                <td className="p-4 text-center font-mono font-bold text-emerald-700">{fmt(log.jam_asli_masuk)}</td>
+                <td className="p-4 text-center font-mono font-bold text-rose-600">{fmt(log.jam_asli_pulang)}</td>
+                <td className="p-4 text-center font-bold">{getKerja(log)}</td>
+                <td className="p-4 text-center"><Badge className={badge.color + ' text-[11px] whitespace-normal max-w-[200px] border'}>{badge.label}</Badge></td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </TableShell>
+      <p className="text-[11px] text-gray-400">* Masuk tercatat otomatis saat login. Pulang tercatat otomatis saat logout. Refresh setiap 3 detik.</p>
+    </div>
+  );
 }
 export default function Bookkeeping() {
   const { activeOutletId, activeOutlet } = useAuth();
