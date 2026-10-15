@@ -128,8 +128,9 @@ export const AuthProvider = ({ children }) => {
   const signOut = async () => {
   try {
     if (user && profile && profile.role !== 'owner') {
-      const today = getTodayWITA();
-      const { data: openLog } = await supabase.from('attendance_logs').select('*').eq('employee_id', user.id).eq('tanggal', today).is('jam_asli_pulang', null).order('jam_asli_masuk', { ascending: false }).limit(1).maybeSingle();
+          const today = getTodayWITA();
+    const nameLike = profile?.full_name || profile?.username || user.email?.split('@')[0] || '';
+    const { data: openLog } = await supabase.from('attendance_logs').select('*').eq('tanggal', today).is('jam_asli_pulang', null).ilike('employee_name', `%${nameLike}%`).order('jam_asli_masuk', { ascending: false }).limit(1).maybeSingle();
       if (openLog) {
         const now = new Date();
         const masuk = new Date(openLog.jam_asli_masuk);
