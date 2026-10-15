@@ -88,8 +88,13 @@ export const AuthProvider = ({ children }) => {
       const outletId = profile.outlet_id || activeOutletId || localStorage.getItem('activeOutletId');
       if (!outletId) return;
       const today = getTodayWITA();
-      const { data: existing } = await supabase.from('attendance_logs').select('id').eq('employee_id', user.id).eq('tanggal', today).is('jam_asli_pulang', null).maybeSingle();
-      if (existing) { loggedTodayRef.current = true; return; }
+const nameLike = profile?.full_name || profile?.username || user.email?.split('@')[0] || '';
+const { data: existing } = await supabase.from('attendance_logs').select('id, jam_asli_masuk').eq('tanggal', today).is('jam_asli_pulang', null).ilike('employee_name', `%${nameLike}%`).maybeSingle();
+if (existing) {
+  const diffMin = (new Date() - new Date(existing.jam_asli_masuk)) / 60000;
+  if (diffMin < 2) { loggedTodayRef.current = true; return; }
+  await supabase.from('attendance_logs').update({ jam_asli_pulang: new Date().toISOString() }).eq('id', existing.id);
+}
       const { data: shift } = await supabase.from('shifts').select('*').eq('outlet_id', outletId).eq('employee_id', user.id).order('created_at', { ascending: false }).limit(1).maybeSingle();
       const now = new Date();
       const nowWitaMin = getNowWITAMinutes();
