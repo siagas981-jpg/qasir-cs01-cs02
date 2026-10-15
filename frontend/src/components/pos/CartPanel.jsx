@@ -35,7 +35,6 @@ export function CartPanel({ cart, stockOf, onCheckout, disabled }) {
           <button onClick={cart.clear} data-testid="cart-clear-button" className="text-xs font-semibold text-slate-500 hover:text-rose-600 inline-flex items-center gap-1"><Trash2 className="h-3.5 w-3.5" /> Kosongkan</button>
         )}
       </div>
-            </div>
       <SaldoShiftCard />
       <div className="flex-1 overflow-y-auto min-h-[120px]">
       {cart.items.length === 0 ? (
