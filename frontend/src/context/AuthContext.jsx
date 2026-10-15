@@ -80,21 +80,42 @@ export const AuthProvider = ({ children }) => {
   fetchData();
 }, [user]);
 
-  // SATU-SATUNYA TEMPAT CATAT MASUK - HAPUS DUPLICATE DI SIGNIN
+    // SATU-SATUNYA TEMPAT CATAT MASUK - VERSI FINAL MULTI LOGIN SEHARI
   useEffect(() => {
     const doAttendance = async () => {
       if (!user ||!profile || loggedTodayRef.current) return;
       if (profile?.role === 'owner' || user.email === 'siagas981@gmail.com') return;
       const outletId = profile.outlet_id || activeOutletId || localStorage.getItem('activeOutletId');
       if (!outletId) return;
+
       const today = getTodayWITA();
-const nameLike = profile?.full_name || profile?.username || user.email?.split('@')[0] || '';
-const { data: existing } = await supabase.from('attendance_logs').select('id, jam_asli_masuk').eq('tanggal', today).is('jam_asli_pulang', null).ilike('employee_name', `%${nameLike}%`).maybeSingle();
-if (existing) {
-  const diffMin = (new Date() - new Date(existing.jam_asli_masuk)) / 60000;
-  if (diffMin < 2) { loggedTodayRef.current = true; return; }
-  await supabase.from('attendance_logs').update({ jam_asli_pulang: new Date().toISOString() }).eq('id', existing.id);
-}
+      const nameLike = profile?.full_name || profile?.username || user.email?.split('@')[0] || '';
+
+      // 1. Cari SESI YANG MASIH KEBUKA (pulang null) - TANPA filter tanggal, biar shift malam ke-handle
+      const { data: openLog } = await supabase
+       .from('attendance_logs')
+       .select('id, jam_asli_masuk')
+       .ilike('employee_name', `%${nameLike}%`)
+       .is('jam_asli_pulang', null)
+       .order('jam_asli_masuk', { ascending: false })
+       .limit(1)
+       .maybeSingle();
+
+      if (openLog) {
+        const diffMin = (new Date() - new Date(openLog.jam_asli_masuk)) / 60000;
+        // Kalau baru 2 menit lalu bikin, jangan dobel
+        if (diffMin < 2) {
+          loggedTodayRef.current = true;
+          return;
+        }
+        // Kalau sudah lama kebuka, tutup dulu otomatis sebelum bikin baru
+        await supabase.from('attendance_logs').update({
+          jam_asli_pulang: new Date().toISOString(),
+          durasi_asli_menit: Math.floor(diffMin)
+        }).eq('id', openLog.id);
+      }
+
+      // 2. BIKIN BARIS BARU SETIAP LOGIN (jadi haekal bisa login 02:39 dan 18:58 = 2 baris)
       const { data: shift } = await supabase.from('shifts').select('*').eq('outlet_id', outletId).eq('employee_id', user.id).order('created_at', { ascending: false }).limit(1).maybeSingle();
       const now = new Date();
       const nowWitaMin = getNowWITAMinutes();
