@@ -91,26 +91,23 @@ function AttendanceTab({ outletId }) {
     queryKey: ["attendance-all", outletId], 
     queryFn: async () => {
       if(!outletId) return [];
-      const { data } = await supabase.from("attendance_logs").select("*").eq("outlet_id", outletId).order("created_at",{ascending:false}).limit(100);
+      const { data } = await supabase.from("attendance_logs").select("*").eq("outlet_id", outletId).order("jam_asli_masuk",{ascending:false}).limit(100);
       return data||[];
     }, 
     enabled:!!outletId, 
     refetchInterval: 5000 
   });
   const todayStr = getTodayWITA();
-  const todayLogs = allLogs.filter(l => l.tanggal === todayStr);
-  const formatTime = (log) => {
-    if(log.jam_masuk) return log.jam_masuk;
-    if(log.created_at){
-      try{
-        const d = new Date(log.created_at);
-        if(!isNaN(d.getTime())) return d.toLocaleTimeString('id-ID',{hour12:false, timeZone:'Asia/Makassar'});
-        return log.created_at.substring(11,19) || "-";
-      }catch(e){ return "-"; }
-    }
-    return "-";
+  const todayLogs = allLogs.filter(l => l.tanggal === todayStr || (l.jam_asli_masuk && new Date(l.jam_asli_masuk).toLocaleDateString('en-CA',{timeZone:'Asia/Makassar'})===todayStr));
+  const formatTime = (val) => {
+    if(!val) return "-";
+    try{
+      const d = new Date(val);
+      if(isNaN(d.getTime())) return val.substring(11,19) || "-";
+      return d.toLocaleTimeString('id-ID',{hour12:false, timeZone:'Asia/Makassar'});
+    }catch{ return "-"; }
   };
-  return (<div className="space-y-6"><div className="flex justify-between items-center"><h3 className="font-bold flex items-center gap-2"><UserCheck className="h-5 w-5" /> Absensi Hari Ini - {todayStr} <Badge variant="outline" className="ml-2">{timeNow} WITA</Badge></h3><Badge className="bg-emerald-600 text-white">{todayLogs.length} Hadir Hari Ini</Badge></div><TableShell><thead><tr className="text-xs"><th className="p-4">Karyawan</th><th className="p-4 text-center">Jam Masuk Real</th><th className="p-4 text-center">Jam Pulang</th><th className="p-4 text-center">Status</th></tr></thead><tbody>{isLoading? <tr><td colSpan={5} className="p-6 text-center">Loading...</td></tr> : todayLogs.length === 0? <tr><td colSpan={5} className="p-6 text-center text-gray-500">Belum ada yang absen hari ini</td></tr> : todayLogs.map((log) => { return (<tr key={log.id} className="border-b"><td className="p-4 font-medium">{log.employee_name || "-"}</td><td className="p-4 text-center font-mono font-bold text-emerald-700">{formatTime(log)}</td><td className="p-4 text-center font-mono">{log.jam_pulang || "-"}</td><td className="p-4 text-center"><Badge className={log.status==='terlambat'? 'bg-amber-500' : 'bg-emerald-100 text-emerald-700'}>{log.status || 'Hadir'}</Badge></td></tr>); })}</tbody></TableShell><div className="mt-8"><h4 className="font-semibold mb-3 text-sm text-gray-600">Riwayat 7 Hari Terakhir</h4><TableShell><thead><tr className="text-xs"><th className="p-3">Tanggal</th><th className="p-3">Karyawan</th><th className="p-3">Masuk</th><th className="p-3">Pulang</th></tr></thead><tbody>{allLogs.slice(0,20).map(l=><tr key={l.id} className="border-b text-xs"><td className="p-3">{l.tanggal}</td><td className="p-3">{l.employee_name}</td><td className="p-3 font-mono">{formatTime(l)}</td><td className="p-3">{l.jam_pulang || "-"}</td></tr>)}</tbody></TableShell></div></div>);
+  return (<div className="space-y-6"><div className="flex justify-between items-center"><h3 className="font-bold flex items-center gap-2"><UserCheck className="h-5 w-5" /> Absensi Hari Ini - {todayStr} <Badge variant="outline" className="ml-2">{timeNow} WITA</Badge></h3><Badge className="bg-emerald-600 text-white">{todayLogs.length} Hadir Hari Ini</Badge></div><TableShell><thead><tr className="text-xs"><th className="p-4">Karyawan</th><th className="p-4">Shift</th><th className="p-4 text-center">Jam Jadwal</th><th className="p-4 text-center">Jam Asli Masuk</th><th className="p-4 text-center">Status</th></tr></thead><tbody>{isLoading? <tr><td colSpan={5} className="p-6 text-center">Loading...</td></tr> : todayLogs.length === 0? <tr><td colSpan={5} className="p-6 text-center text-gray-500">Belum ada yang absen hari ini</td></tr> : todayLogs.map((log) => (<tr key={log.id} className="border-b"><td className="p-4 font-medium">{log.employee_name || "-"}</td><td className="p-4">{log.shift_name || "-"}</td><td className="p-4 text-center">{log.jam_jadwal_masuk || "-"}</td><td className="p-4 text-center font-mono font-bold text-emerald-700">{formatTime(log.jam_asli_masuk)}</td><td className="p-4 text-center"><Badge className={log.status==='terlambat'? 'bg-amber-500' : 'bg-emerald-100 text-emerald-700'}>{log.status || 'Hadir'}</Badge></td></tr>))}</tbody></TableShell></div>);
 }
 export default function Bookkeeping() {
   const { activeOutletId, activeOutlet, user } = useAuth();
