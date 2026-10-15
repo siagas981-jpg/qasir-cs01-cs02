@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
-import { Plus, Wallet, Receipt, TrendingUp, Clock, Timer, UserCheck } from "lucide-react";
+import { Plus, Wallet, Receipt, TrendingUp, Clock, Timer, UserCheck, Landmark } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from "recharts";
 import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
@@ -17,6 +17,8 @@ import { useDateRange, fetchSales, fetchPurchases, toDateStr } from "@/lib/repor
 import { fetchExpenses, addExpense, fetchProfitSummary, fetchProfitSeries, EXPENSE_CATEGORIES } from "@/lib/bookkeeping";
 import { PageHeader, RangeBar, ExportButtons, StatCard, TableShell, shortId, formatShort } from "@/components/reports/parts";
 import { supabase } from "@/lib/supabase/client";
+// === BARU: LACI MANAGER ===
+import LaciManager from "@/components/laci/LaciManager";
 
 const getTodayWITA = () => new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Makassar" });
 const TIME_SHIFT_PRESETS = {
@@ -161,7 +163,30 @@ function AttendanceTab({ outletId }) {
     </div>
   );
 }
+
 export default function Bookkeeping() {
   const { activeOutletId, activeOutlet } = useAuth();
-  return (<div className="p-4 md:p-8 max-w-6xl"><PageHeader outlet={activeOutlet} title="Pembukuan" subtitle="Filter shift: Pagi 09-17, Sore 17-01, Malam 01-09" /><Tabs defaultValue="attendance"><TabsList className="mb-6 flex-wrap h-auto"><TabsTrigger value="income"><Wallet className="h-4 w-4 mr-1.5" /> Pemasukan</TabsTrigger><TabsTrigger value="expense"><Receipt className="h-4 w-4 mr-1.5" /> Pengeluaran</TabsTrigger><TabsTrigger value="profit"><TrendingUp className="h-4 w-4 mr-1.5" /> Laba Rugi</TabsTrigger><TabsTrigger value="shift"><Clock className="h-4 w-4 mr-1.5" /> Shift</TabsTrigger><TabsTrigger value="attendance" className="data-[state=active]:bg-black data-[state=active]:text-white"><UserCheck className="h-4 w-4 mr-1.5" /> Absensi</TabsTrigger></TabsList><TabsContent value="income"><IncomeTab outletId={activeOutletId} /></TabsContent><TabsContent value="expense"><ExpenseTab outletId={activeOutletId} /></TabsContent><TabsContent value="profit"><ProfitTab outletId={activeOutletId} /></TabsContent><TabsContent value="shift"><ShiftTab outletId={activeOutletId} /></TabsContent><TabsContent value="attendance"><AttendanceTab outletId={activeOutletId} /></TabsContent></Tabs></div>);
+  return (
+    <div className="p-4 md:p-8 max-w-6xl">
+      <PageHeader outlet={activeOutlet} title="Pembukuan" subtitle="Filter shift: Pagi 09-17, Sore 17-01, Malam 01-09" />
+      <Tabs defaultValue="attendance">
+        <TabsList className="mb-6 flex-wrap h-auto gap-1">
+          <TabsTrigger value="income"><Wallet className="h-4 w-4 mr-1.5" /> Pemasukan</TabsTrigger>
+          <TabsTrigger value="expense"><Receipt className="h-4 w-4 mr-1.5" /> Pengeluaran</TabsTrigger>
+          <TabsTrigger value="profit"><TrendingUp className="h-4 w-4 mr-1.5" /> Laba Rugi</TabsTrigger>
+          <TabsTrigger value="shift"><Clock className="h-4 w-4 mr-1.5" /> Shift</TabsTrigger>
+          <TabsTrigger value="attendance" className="data-[state=active]:bg-black data-[state=active]:text-white"><UserCheck className="h-4 w-4 mr-1.5" /> Absensi</TabsTrigger>
+          {/* === TAB BARU LACI === */}
+          <TabsTrigger value="laci" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white"><Landmark className="h-4 w-4 mr-1.5" /> Laci 1,2,5</TabsTrigger>
+        </TabsList>
+        <TabsContent value="income"><IncomeTab outletId={activeOutletId} /></TabsContent>
+        <TabsContent value="expense"><ExpenseTab outletId={activeOutletId} /></TabsContent>
+        <TabsContent value="profit"><ProfitTab outletId={activeOutletId} /></TabsContent>
+        <TabsContent value="shift"><ShiftTab outletId={activeOutletId} /></TabsContent>
+        <TabsContent value="attendance"><AttendanceTab outletId={activeOutletId} /></TabsContent>
+        {/* === CONTENT BARU LACI === */}
+        <TabsContent value="laci"><LaciManager outletId={activeOutletId} /></TabsContent>
+      </Tabs>
+    </div>
+  );
 }
