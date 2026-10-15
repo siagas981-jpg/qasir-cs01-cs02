@@ -9,10 +9,6 @@ const getNowWITAMinutes = () => {
   const now = new Date();
   return (now.getUTCHours()*60 + now.getUTCMinutes() + 8*60) % 1440;
 };
-const getNowWITATime = () => {
-  const now = new Date().toLocaleString("en-GB",{timeZone:"Asia/Makassar", hour12:false});
-  return now.split(",")[1]?.trim() || "00:00:00";
-};
 const hmToMin = (hm) => {
   if(!hm) return 0;
   const [h,m] = hm.split(':').map(Number);
@@ -39,19 +35,17 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
   let mounted = true;
   const init = async () => {
-    // jangan matikan loading dulu
     const { data: { session } } = await supabase.auth.getSession();
     if (!mounted) return;
     setSession(session);
     setUser(session?.user?? null);
-    // loading akan dimatikan di useEffect kedua (yang fetch profile & outlet), bukan di sini
   };
   init();
   const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
     setSession(session);
     setUser(session?.user?? null);
     if (!session) {
-      setLoading(false); // kalau logout, baru matikan loading
+      setLoading(false);
     }
   });
   return () => { mounted = false; subscription.unsubscribe(); };
@@ -74,63 +68,90 @@ export const AuthProvider = ({ children }) => {
         }
       }
     } finally {
-      setLoading(false); // BARU MATIKAN DI SINI
+      setLoading(false);
     }
   };
   fetchData();
 }, [user]);
 
-    // SATU-SATUNYA TEMPAT CATAT MASUK - VERSI FINAL MULTI LOGIN SEHARI
+  // VERSI FINAL - MULTI LOGIN SEHARI + DEBUG
   useEffect(() => {
     const doAttendance = async () => {
-      if (!user ||!profile || loggedTodayRef.current) return;
-      if (profile?.role === 'owner' || user.email === 'siagas981@gmail.com') return;
-      const outletId = profile.outlet_id || activeOutletId || localStorage.getItem('activeOutletId');
-      if (!outletId) return;
-
-      const today = getTodayWITA();
-      const nameLike = profile?.full_name || profile?.username || user.email?.split('@')[0] || '';
-
-      // 1. Cari SESI YANG MASIH KEBUKA (pulang null) - TANPA filter tanggal, biar shift malam ke-handle
-      const { data: openLog } = await supabase
-       .from('attendance_logs')
-       .select('id, jam_asli_masuk')
-       .ilike('employee_name', `%${nameLike}%`)
-       .is('jam_asli_pulang', null)
-       .order('jam_asli_masuk', { ascending: false })
-       .limit(1)
-       .maybeSingle();
-
-      if (openLog) {
-        const diffMin = (new Date() - new Date(openLog.jam_asli_masuk)) / 60000;
-        // Kalau baru 2 menit lalu bikin, jangan dobel
-        if (diffMin < 2) {
-          loggedTodayRef.current = true;
+      try {
+        if (!user ||!profile) return;
+        if (loggedTodayRef.current) {
+          console.log('ABSENSI SKIP: sudah logged hari ini');
           return;
         }
-        // Kalau sudah lama kebuka, tutup dulu otomatis sebelum bikin baru
-        await supabase.from('attendance_logs').update({
-          jam_asli_pulang: new Date().toISOString(),
-          durasi_asli_menit: Math.floor(diffMin)
-        }).eq('id', openLog.id);
-      }
+        if (profile?.role === 'owner' || user.email === 'siagas981@gmail.com') return;
+        const outletId = profile.outlet_id || activeOutletId || localStorage.getItem('activeOutletId');
+        if (!outletId) {
+          console.log('ABSENSI SKIP: outletId kosong');
+          return;
+        }
 
-      // 2. BIKIN BARIS BARU SETIAP LOGIN (jadi haekal bisa login 02:39 dan 18:58 = 2 baris)
-      const { data: shift } = await supabase.from('shifts').select('*').eq('outlet_id', outletId).eq('employee_id', user.id).order('created_at', { ascending: false }).limit(1).maybeSingle();
-      const now = new Date();
-      const nowWitaMin = getNowWITAMinutes();
-      let status = 'Tepat';
-      if (shift?.jam_masuk) {
-        const diff = diffMasuk(nowWitaMin, hmToMin(shift.jam_masuk));
-        if (diff > 15) status = `Telat ${diff}m`;
-        else if (diff < -15) status = `Lebih Awal ${Math.abs(diff)}m`;
+        const today = getTodayWITA();
+        const employeeName = profile?.full_name || profile?.username || user.email?.split('@')[0] || 'Unknown';
+        console.log('ABSENSI START login:', employeeName, 'tanggal', today);
+
+        // 1. Cek ada yang masih kebuka gak (pulang null) - tutup dulu kalau ada
+        const { data: openLog } = await supabase
+         .from('attendance_logs')
+         .select('id, jam_asli_masuk')
+         .eq('employee_id', user.id)
+         .is('jam_asli_pulang', null)
+         .order('jam_asli_masuk', { ascending: false })
+         .limit(1)
+         .maybeSingle();
+
+        if (openLog) {
+          const diffMin = (new Date() - new Date(openLog.jam_asli_masuk)) / 60000;
+          console.log('ABSENSI found openLog', openLog.id, 'diff', diffMin);
+          if (diffMin < 2) {
+            loggedTodayRef.current = true;
+            console.log('ABSENSI skip karena baru 2 menit');
+            return;
+          }
+          const { error: closeErr } = await supabase.from('attendance_logs').update({
+            jam_asli_pulang: new Date().toISOString(),
+            durasi_asli_menit: Math.floor(diffMin)
+          }).eq('id', openLog.id);
+          if (closeErr) console.error('ABSENSI close error', closeErr);
+        }
+
+        // 2. Selalu bikin BARU setiap login
+        const { data: shift } = await supabase.from('shifts').select('*').eq('outlet_id', outletId).eq('employee_id', user.id).order('created_at', { ascending: false }).limit(1).maybeSingle();
+        const now = new Date();
+        const nowWitaMin = getNowWITAMinutes();
+        let status = 'Tepat';
+        if (shift?.jam_masuk) {
+          const diff = diffMasuk(nowWitaMin, hmToMin(shift.jam_masuk));
+          if (diff > 15) status = `Telat ${diff}m`;
+          else if (diff < -15) status = `Lebih Awal ${Math.abs(diff)}m`;
+        }
+
+        const payload = {
+          outlet_id: outletId,
+          employee_id: user.id,
+          employee_name: employeeName,
+          tanggal: today,
+          jam_jadwal_masuk: shift?.jam_masuk || null,
+          jam_jadwal_pulang: shift?.jam_pulang || null,
+          shift_name: shift?.nama_shift || 'Tanpa Jadwal',
+          jam_asli_masuk: now.toISOString(),
+          status: status
+        };
+        console.log('ABSENSI insert payload', payload);
+        const { data: inserted, error: insErr } = await supabase.from('attendance_logs').insert(payload).select().single();
+        if (insErr) {
+          console.error('ABSENSI INSERT GAGAL', insErr);
+        } else {
+          console.log('ABSENSI BERHASIL', inserted);
+        }
+        loggedTodayRef.current = true;
+      } catch (e) {
+        console.error('ABSENSI exception', e);
       }
-      await supabase.from('attendance_logs').insert({
-        outlet_id: outletId, employee_id: user.id, employee_name: profile.full_name || user.email.split('@')[0],
-        tanggal: today, jam_jadwal_masuk: shift?.jam_masuk || null, jam_jadwal_pulang: shift?.jam_pulang || null,
-        shift_name: shift?.nama_shift || 'Tanpa Jadwal', jam_asli_masuk: now.toISOString(), status: status
-      });
-      loggedTodayRef.current = true;
     };
     doAttendance();
   }, [user, profile, activeOutletId]);
@@ -142,31 +163,26 @@ export const AuthProvider = ({ children }) => {
     try { localStorage.setItem('activeOutletId', id); } catch {}
   };
 
-  // SIGNIN BERSIH - TIDAK CATAT DOBEL LAGI
   const signIn = async (email, password) => {
     loggedTodayRef.current = false;
+    console.log('SIGNIN reset loggedTodayRef');
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) throw error;
     return data;
   };
 
-  // SIGNOUT BERSIH VERSI B - ADA TOTAL JAM + PULANG CEPAT
   const signOut = async () => {
   try {
-    if (user && profile && profile.role !== 'owner') {
-          const today = getTodayWITA();
-    const nameLike = profile?.full_name || profile?.username || user.email?.split('@')[0] || '';
-    const { data: openLog } = await supabase.from('attendance_logs').select('*').eq('tanggal', today).is('jam_asli_pulang', null).ilike('employee_name', `%${nameLike}%`).order('jam_asli_masuk', { ascending: false }).limit(1).maybeSingle();
+    if (user && profile && profile.role!== 'owner') {
+      const today = getTodayWITA();
+      const { data: openLog } = await supabase.from('attendance_logs').select('*').eq('employee_id', user.id).is('jam_asli_pulang', null).order('jam_asli_masuk', { ascending: false }).limit(1).maybeSingle();
       if (openLog) {
         const now = new Date();
         const masuk = new Date(openLog.jam_asli_masuk);
         let durMenit = Math.floor((now - masuk) / 60000);
         if (durMenit < 1) durMenit = 1;
-
         let statusAkhir = openLog.status || 'Tepat';
         const jamKerja = `${Math.floor(durMenit/60)}j ${durMenit%60}m`;
-
-        // LOGIKA BARU: Kalau kerja cuma <10 menit, anggap Test, jangan hitung Pulang Cepat
         if (durMenit < 10) {
           statusAkhir = `Test - Kerja ${jamKerja}`;
         } else if (openLog.jam_jadwal_pulang && openLog.jam_jadwal_masuk) {
@@ -180,8 +196,6 @@ export const AuthProvider = ({ children }) => {
             if (nowMin < masukMin) nowAdj = nowMin + 1440;
           }
           const jadwalDur = crossMidnight? (1440 - masukMin + pulangMin) : (pulangMin - masukMin);
-
-          // Hanya hitung pulang cepat kalau sudah kerja minimal 50% jadwal
           if (nowAdj < pulangAdj - 15 && durMenit > jadwalDur * 0.5) {
             statusAkhir += ` | Pulang Cepat ${pulangAdj - nowAdj}m`;
           } else if (nowAdj > pulangAdj + 15) {
@@ -191,7 +205,6 @@ export const AuthProvider = ({ children }) => {
         } else {
           statusAkhir += ` | Kerja ${jamKerja}`;
         }
-
         await supabase.from('attendance_logs').update({ jam_asli_pulang: now.toISOString(), durasi_asli_menit: durMenit, status: statusAkhir }).eq('id', openLog.id);
       }
     }
