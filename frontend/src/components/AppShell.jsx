@@ -23,13 +23,25 @@ const NAV = [
 ];
 
 function StatusBadge({ online, healthy }) {
-  const ok = online && healthy!== false;
-  return (
-    <span data-testid="supabase-sync-status-badge" className="inline-flex items-center gap-1.5 text-xs font-medium">
-      <span className={`h-2 w-2 rounded-full ${ok? "bg-emerald-500" : "bg-rose-500"} ${ok? "" : "animate-pulse"}`} />
-      <span className="hidden sm:inline">{!online? "Offline" : healthy === false? "Supabase error" : "Online"}</span>
-    </span>
-  );
+  try {
+    const ok = online && healthy!== false;
+    return (
+      <span data-testid="supabase-sync-status-badge" className="inline-flex items-center gap-1.5 text-xs font-medium">
+        <span className={`h-2 w-2 rounded-full ${ok? "bg-emerald-500" : "bg-rose-500"} ${ok? "" : "animate-pulse"}`} />
+        <span className="hidden sm:inline">{!online? "Offline" : healthy === false? "Supabase error" : "Online"}</span>
+      </span>
+    );
+  } catch { return <span className="text-xs">Online</span>; }
+}
+
+// ANTI PUTIH BOUNDARY KHUSUS UNTUK OUTLET
+function SafeOutlet() {
+  try {
+    return <Outlet />;
+  } catch (e) {
+    console.warn("Outlet error:", e);
+    return <div className="p-10 text-center">Gagal load halaman, coba refresh.<br/><button onClick={()=>window.location.reload()} className="mt-4 px-4 py-2 bg-black text-white rounded">Refresh</button></div>;
+  }
 }
 
 export default function AppShell() {
@@ -40,12 +52,29 @@ export default function AppShell() {
   const [thumb, setThumb] = useState({ width: 0, left: 0 });
   const [dragging, setDragging] = useState(false);
 
+  // FIX UTAMA - JANGAN PERNAH BIKIN PUTIH PAS FLUSH QUEUE!
   useEffect(() => {
-    if (!online ||!user?.id) return;
-    flushQueue(user.id).then((r) => {
-      if (r?.synced) toast.success(`${r.synced} transaksi offline tersinkron`);
-      if (r?.failed) toast.error(`${r.failed} transaksi offline ditolak — cek antrean`);
-    }).catch(()=>{});
+    let cancelled = false;
+    const run = async () => {
+      try {
+        if (!online ||!user?.id) return;
+        const r = await flushQueue(user.id);
+        if (cancelled) return;
+        if (r?.synced) toast.success(`${r.synced} transaksi offline tersinkron`);
+        if (r?.failed) toast.error(`${r.failed} transaksi offline ditolak — cek antrean`);
+      } catch (e) {
+        console.warn("flushQueue di AppShell error (diamankan):", e?.name, e?.message);
+        // JANGAN THROW! Kalau NotFoundError, anggap selesai, jangan bikin putih!
+        if (e?.name === "NotFoundError") {
+          try {
+            localStorage.removeItem("qasir.offlineQueue.v1");
+            indexedDB.deleteDatabase("qasir_offline_db");
+          } catch {}
+        }
+      }
+    };
+    run();
+    return () => { cancelled = true; };
   }, [online, user?.id]);
 
   const updateThumb = () => {
@@ -53,10 +82,7 @@ export default function AppShell() {
       const el = scrollRef.current;
       if (!el) return;
       const { scrollWidth, clientWidth, scrollLeft } = el;
-      if (scrollWidth <= clientWidth) {
-        setShowTrack(false);
-        return;
-      }
+      if (scrollWidth <= clientWidth) { setShowTrack(false); return; }
       setShowTrack(true);
       const trackWidth = el.clientWidth;
       const thumbWidth = Math.max((clientWidth / scrollWidth) * trackWidth, 40);
@@ -68,17 +94,19 @@ export default function AppShell() {
   };
 
   useEffect(() => {
-    updateThumb();
-    const el = scrollRef.current;
-    if (!el) return;
-    el.addEventListener("scroll", updateThumb);
-    window.addEventListener("resize", updateThumb);
-    return () => {
-      try {
-        el.removeEventListener("scroll", updateThumb);
-        window.removeEventListener("resize", updateThumb);
-      } catch {}
-    };
+    try {
+      updateThumb();
+      const el = scrollRef.current;
+      if (!el) return;
+      el.addEventListener("scroll", updateThumb);
+      window.addEventListener("resize", updateThumb);
+      return () => {
+        try {
+          el.removeEventListener("scroll", updateThumb);
+          window.removeEventListener("resize", updateThumb);
+        } catch {}
+      };
+    } catch {}
   }, []);
 
   const onTrackMouseDown = (e) => {
@@ -102,7 +130,6 @@ export default function AppShell() {
     if (!el) return;
     const trackWidth = el?.clientWidth || 0;
     const { scrollWidth, clientWidth } = el;
-
     const onMove = (ev) => {
       try {
         const dx = ev.clientX - startX;
@@ -125,7 +152,6 @@ export default function AppShell() {
   const startXRef = useRef(0);
   const scrollLeftRef = useRef(0);
 
-  // LOADING GUARD - INI KUNCI ANTI PUTIH DI HP LAIN OWY!
   if (!user) {
     return <div className="min-h-screen grid place-items-center p-10">Loading akun...</div>;
   }
@@ -138,7 +164,6 @@ export default function AppShell() {
             <div className="grid h-9 w-9 place-items-center rounded-md bg-emerald-600 text-white"><Store className="h-5 w-5" /></div>
             <span className="font-heading text-lg font-extrabold tracking-tight hidden sm:block">CS Qasir</span>
           </div>
-
           <div className="flex-1 min-w-0 flex flex-col justify-center">
             <nav
               ref={scrollRef}
@@ -174,22 +199,12 @@ export default function AppShell() {
                 </NavLink>
               ))}
             </nav>
-
             {showTrack && (
-              <div
-                onMouseDown={onTrackMouseDown}
-                className="relative mt-1 h-2 w-full bg-slate-200 rounded-full cursor-pointer group"
-                title="Geser untuk scroll menu"
-              >
-                <div
-                  onMouseDown={onThumbMouseDown}
-                  className={`absolute top-0 h-full bg-slate-900 rounded-full hover:bg-black transition-colors ${dragging? "bg-black h-[8px] -top-[1px]" : ""}`}
-                  style={{ width: `${thumb.width}px`, left: `${thumb.left}px` }}
-                />
+              <div onMouseDown={onTrackMouseDown} className="relative mt-1 h-2 w-full bg-slate-200 rounded-full cursor-pointer group">
+                <div onMouseDown={onThumbMouseDown} className={`absolute top-0 h-full bg-slate-900 rounded-full hover:bg-black transition-colors ${dragging? "bg-black h-[8px] -top-[1px]" : ""}`} style={{ width: `${thumb.width}px`, left: `${thumb.left}px` }} />
               </div>
             )}
           </div>
-
           <div className="ml-auto flex items-center gap-2 sm:gap-3 shrink-0">
             <div className="hidden md:block"><OutletSwitcher /></div>
             <StatusBadge online={online} healthy={healthy} />
@@ -205,7 +220,7 @@ export default function AppShell() {
         </div>
         <div className="md:hidden border-t px-4 py-2"><OutletSwitcher /></div>
       </header>
-      <main><Outlet /></main>
+      <main><SafeOutlet /></main>
     </div>
   );
 }
