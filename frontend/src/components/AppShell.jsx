@@ -41,29 +41,30 @@ export default function AppShell() {
   const [dragging, setDragging] = useState(false);
 
   useEffect(() => {
-    if (!online ||!user) return;
+    if (!online ||!user?.id) return;
     flushQueue(user.id).then((r) => {
-      if (r.synced) toast.success(`${r.synced} transaksi offline tersinkron`);
-      if (r.failed) toast.error(`${r.failed} transaksi offline ditolak — cek antrean`);
-    });
-  }, [online, user]);
+      if (r?.synced) toast.success(`${r.synced} transaksi offline tersinkron`);
+      if (r?.failed) toast.error(`${r.failed} transaksi offline ditolak — cek antrean`);
+    }).catch(()=>{});
+  }, [online, user?.id]);
 
-  // update posisi garis tebal
   const updateThumb = () => {
-    const el = scrollRef.current;
-    if (!el) return;
-    const { scrollWidth, clientWidth, scrollLeft } = el;
-    if (scrollWidth <= clientWidth) {
-      setShowTrack(false);
-      return;
-    }
-    setShowTrack(true);
-    const trackWidth = el.clientWidth;
-    const thumbWidth = Math.max((clientWidth / scrollWidth) * trackWidth, 40);
-    const maxScroll = scrollWidth - clientWidth;
-    const maxThumb = trackWidth - thumbWidth;
-    const thumbLeft = maxScroll > 0? (scrollLeft / maxScroll) * maxThumb : 0;
-    setThumb({ width: thumbWidth, left: thumbLeft });
+    try {
+      const el = scrollRef.current;
+      if (!el) return;
+      const { scrollWidth, clientWidth, scrollLeft } = el;
+      if (scrollWidth <= clientWidth) {
+        setShowTrack(false);
+        return;
+      }
+      setShowTrack(true);
+      const trackWidth = el.clientWidth;
+      const thumbWidth = Math.max((clientWidth / scrollWidth) * trackWidth, 40);
+      const maxScroll = scrollWidth - clientWidth;
+      const maxThumb = trackWidth - thumbWidth;
+      const thumbLeft = maxScroll > 0? (scrollLeft / maxScroll) * maxThumb : 0;
+      setThumb({ width: thumbWidth, left: thumbLeft });
+    } catch {}
   };
 
   useEffect(() => {
@@ -73,20 +74,23 @@ export default function AppShell() {
     el.addEventListener("scroll", updateThumb);
     window.addEventListener("resize", updateThumb);
     return () => {
-      el.removeEventListener("scroll", updateThumb);
-      window.removeEventListener("resize", updateThumb);
+      try {
+        el.removeEventListener("scroll", updateThumb);
+        window.removeEventListener("resize", updateThumb);
+      } catch {}
     };
   }, []);
 
-  // drag garis tebal untuk geser menu
   const onTrackMouseDown = (e) => {
     const el = scrollRef.current;
     if (!el) return;
-    const trackRect = e.currentTarget.getBoundingClientRect();
-    const clickX = e.clientX - trackRect.left;
-    const { scrollWidth, clientWidth } = el;
-    const ratio = clickX / trackRect.width;
-    el.scrollLeft = ratio * (scrollWidth - clientWidth);
+    try {
+      const trackRect = e.currentTarget.getBoundingClientRect();
+      const clickX = e.clientX - trackRect.left;
+      const { scrollWidth, clientWidth } = el;
+      const ratio = clickX / trackRect.width;
+      el.scrollLeft = ratio * (scrollWidth - clientWidth);
+    } catch {}
   };
 
   const onThumbMouseDown = (e) => {
@@ -95,15 +99,18 @@ export default function AppShell() {
     const startX = e.clientX;
     const startLeft = thumb.left;
     const el = scrollRef.current;
-    const trackWidth = el.clientWidth;
+    if (!el) return;
+    const trackWidth = el?.clientWidth || 0;
     const { scrollWidth, clientWidth } = el;
 
     const onMove = (ev) => {
-      const dx = ev.clientX - startX;
-      const newLeft = Math.min(Math.max(startLeft + dx, 0), trackWidth - thumb.width);
-      const maxThumb = trackWidth - thumb.width;
-      const ratio = maxThumb > 0? newLeft / maxThumb : 0;
-      el.scrollLeft = ratio * (scrollWidth - clientWidth);
+      try {
+        const dx = ev.clientX - startX;
+        const newLeft = Math.min(Math.max(startLeft + dx, 0), trackWidth - thumb.width);
+        const maxThumb = trackWidth - thumb.width;
+        const ratio = maxThumb > 0? newLeft / maxThumb : 0;
+        el.scrollLeft = ratio * (scrollWidth - clientWidth);
+      } catch {}
     };
     const onUp = () => {
       setDragging(false);
@@ -114,10 +121,14 @@ export default function AppShell() {
     window.addEventListener("mouseup", onUp);
   };
 
-  // drag menu nya langsung (geser menu pakai mouse)
   const isDownRef = useRef(false);
   const startXRef = useRef(0);
   const scrollLeftRef = useRef(0);
+
+  // LOADING GUARD - INI KUNCI ANTI PUTIH DI HP LAIN OWY!
+  if (!user) {
+    return <div className="min-h-screen grid place-items-center p-10">Loading akun...</div>;
+  }
 
   return (
     <div className="min-h-screen bg-[#F8FAFC]">
@@ -128,28 +139,35 @@ export default function AppShell() {
             <span className="font-heading text-lg font-extrabold tracking-tight hidden sm:block">CS Qasir</span>
           </div>
 
-          {/* WRAPPER MENU + GARIS TEBAL */}
           <div className="flex-1 min-w-0 flex flex-col justify-center">
             <nav
               ref={scrollRef}
               className="flex items-center gap-1 overflow-x-auto scrollbar-none select-none cursor-grab active:cursor-grabbing"
               style={{ scrollbarWidth: "none" }}
               onMouseDown={(e) => {
-                isDownRef.current = true;
-                startXRef.current = e.pageX - scrollRef.current.offsetLeft;
-                scrollLeftRef.current = scrollRef.current.scrollLeft;
+                try {
+                  const cur = scrollRef.current;
+                  if (!cur) return;
+                  isDownRef.current = true;
+                  startXRef.current = e.pageX - (cur.offsetLeft || 0);
+                  scrollLeftRef.current = cur.scrollLeft;
+                } catch {}
               }}
               onMouseLeave={() => (isDownRef.current = false)}
               onMouseUp={() => (isDownRef.current = false)}
               onMouseMove={(e) => {
                 if (!isDownRef.current) return;
-                e.preventDefault();
-                const x = e.pageX - scrollRef.current.offsetLeft;
-                const walk = (x - startXRef.current) * 1.5;
-                scrollRef.current.scrollLeft = scrollLeftRef.current - walk;
+                try {
+                  e.preventDefault();
+                  const cur = scrollRef.current;
+                  if (!cur) return;
+                  const x = e.pageX - (cur.offsetLeft || 0);
+                  const walk = (x - startXRef.current) * 1.5;
+                  cur.scrollLeft = scrollLeftRef.current - walk;
+                } catch {}
               }}
             >
-              {NAV.filter((n) =>!n.owner || isOwner).map((n) => (
+              {NAV.filter((n) =>!n.owner ||!!isOwner).map((n) => (
                 <NavLink key={n.to} to={n.to} end={n.end} data-testid={n.id}
                   className={({ isActive }) => `whitespace-nowrap rounded-md px-3 py-2 text-sm font-semibold transition-colors inline-flex items-center gap-1.5 shrink-0 ${isActive? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"}`}>
                   {n.icon && <n.icon className="h-4 w-4" />}{n.label}
@@ -157,7 +175,6 @@ export default function AppShell() {
               ))}
             </nav>
 
-            {/* GARIS TEBAL DI BAWAH MENU */}
             {showTrack && (
               <div
                 onMouseDown={onTrackMouseDown}
@@ -176,10 +193,10 @@ export default function AppShell() {
           <div className="ml-auto flex items-center gap-2 sm:gap-3 shrink-0">
             <div className="hidden md:block"><OutletSwitcher /></div>
             <StatusBadge online={online} healthy={healthy} />
-            <QueueSheet queue={queue} online={online} />
+            <QueueSheet queue={queue || []} online={!!online} />
             <div className="hidden lg:flex flex-col items-end leading-tight">
-              <span className="text-xs font-semibold" data-testid="header-user-email">{user?.email}</span>
-              <span className="text-[10px] uppercase tracking-wider text-emerald-700 font-bold" data-testid="header-user-role">{profile?.role}</span>
+              <span className="text-xs font-semibold" data-testid="header-user-email">{user?.email || "-"}</span>
+              <span className="text-[10px] uppercase tracking-wider text-emerald-700 font-bold" data-testid="header-user-role">{profile?.role || "loading..."}</span>
             </div>
             <button onClick={signOut} data-testid="logout-button" className="rounded-md p-2 text-slate-600 hover:bg-slate-900 hover:text-white transition-colors" aria-label="Keluar">
               <LogOut className="h-4 w-4" />
