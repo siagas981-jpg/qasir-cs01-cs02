@@ -14,7 +14,17 @@ export default function LaciManager({ outletId }) {
   const [newJenis, setNewJenis] = useState("cash")
   const [transfer, setTransfer] = useState({ dari: "", ke: "", jumlah: "" })
 
-  // === LOGIKA BISNIS DATE 01:00 WITA ===
+  // === FORMATTER RUPIAH ===
+  const formatRupiah = (angka) => {
+    if (!angka) return "";
+    const numberString = angka.replace(/\D/g, "");
+    if (!numberString) return "";
+    return parseInt(numberString, 10).toLocaleString("id-ID");
+  };
+  const unformatRupiah = (formatted) => {
+    return Number(formatted.replace(/\./g, "").replace(/[^0-9]/g, ""));
+  };
+
   const getBusinessDate = () => {
     const now = new Date();
     const witaStr = now.toLocaleString("en-US", { timeZone: "Asia/Makassar" });
@@ -30,9 +40,9 @@ export default function LaciManager({ outletId }) {
     const witaStr = now.toLocaleString("en-US", { timeZone: "Asia/Makassar" });
     const wita = new Date(witaStr);
     const hour = wita.getHours();
-    if (hour >= 1 && hour < 9) return "MALAM"; // Haekal
-    if (hour >= 9 && hour < 17) return "PAGI"; // Fitry
-    return "SORE"; // Eqy
+    if (hour >= 1 && hour < 9) return "MALAM";
+    if (hour >= 9 && hour < 17) return "PAGI";
+    return "SORE";
   }
 
   const fetchLaci = useCallback(async () => {
@@ -40,8 +50,6 @@ export default function LaciManager({ outletId }) {
     setLoading(true)
     const { data } = await supabase.from("laci").select("*").eq("outlet_id", outletId).order("kode", { ascending: true })
     setLaci(data || [])
-
-    // Fetch setoran hari bisnis ini
     const businessDate = getBusinessDate();
     const { data: deposits } = await supabase.from("laci_daily_deposit").select("*").eq("outlet_id", outletId).eq("business_date", businessDate)
     setDailyDeposits(deposits || [])
@@ -52,9 +60,7 @@ export default function LaciManager({ outletId }) {
 
   const canInputDeposit = (laciKode) => {
     const shift = getCurrentShift();
-    // ATURAN KERAS: Hanya shift MALAM (Haekal) yang boleh
     if (shift!== "MALAM") return { allowed: false, reason: `Terkunci. Hanya Shift Malam (Haekal 01:00-09:00) yang boleh input. Shift kamu: ${shift}. Fitry shift 2 tidak bisa input.` };
-    // Cek sudah setor belum hari ini
     const sudah = dailyDeposits.find(d => d.laci_kode === laciKode);
     if (sudah) return { allowed: false, reason: `Sudah setor hari ini Rp ${Number(sudah.jumlah).toLocaleString("id-ID")} jam ${new Date(sudah.created_at).toLocaleString("id-ID")}. Reset jam 01:00 besok.` };
     return { allowed: true, reason: "" };
@@ -72,13 +78,10 @@ export default function LaciManager({ outletId }) {
   }
 
   const handleDeposit = async () => {
-    const jml = Number(depositJumlah)
+    const jml = unformatRupiah(depositJumlah)
     if (!selectedLaci || jml <= 0) return alert("Isi jumlah dengan benar")
-
     const businessDate = getBusinessDate();
     const shift = getCurrentShift();
-
-    // 1. Simpan ke tabel harian (1x sehari)
     const { error: depError } = await supabase.from("laci_daily_deposit").insert({
       outlet_id: outletId,
       laci_kode: selectedLaci.kode,
@@ -88,11 +91,8 @@ export default function LaciManager({ outletId }) {
       tanggal_input: new Date().toISOString()
     })
     if (depError) return alert("Gagal: " + depError.message + " (Mungkin sudah input hari ini)");
-
-    // 2. Update saldo laci
     const { error: laciError } = await supabase.from("laci").update({ saldo: Number(selectedLaci.saldo) + jml }).eq("id", selectedLaci.id)
     if (laciError) return alert(laciError.message)
-
     setShowDeposit(false)
     fetchLaci()
     alert(`Berhasil! Saldo ${selectedLaci.nama} ditambah Rp ${jml.toLocaleString("id-ID")}. Terkunci sampai jam 01:00 besok.`)
@@ -106,7 +106,7 @@ export default function LaciManager({ outletId }) {
 
   const handleTransfer = async () => {
     const { dari, ke, jumlah } = transfer
-    const jml = Number(jumlah)
+    const jml = unformatRupiah(jumlah)
     if (!dari ||!ke || jml <= 0) return alert("Lengkapi data transfer")
     if (dari === ke) return alert("Asal dan tujuan tidak boleh sama")
     const laciDari = laci.find(l => l.id === dari)
@@ -176,14 +176,25 @@ export default function LaciManager({ outletId }) {
         })}
       </div>
 
-      {/* MODAL INPUT SALDO HARIAN */}
       {showDeposit && selectedLaci && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl p-4 w-full max-w-sm">
             <h4 className="font-bold mb-1">Input Saldo Manual - {selectedLaci.nama}</h4>
             <p className="text-[11px] opacity-60 mb-3">Hari Bisnis: {businessDate} | Shift: {currentShift} (Haekal) | 1x sehari, lock sampai 01:00 besok</p>
-            <label className="text-xs font-bold">Jumlah Setoran</label>
-            <input type="number" autoFocus value={depositJumlah} onChange={e => setDepositJumlah(e.target.value)} placeholder="500000" className="w-full border p-3 rounded-lg text-sm mb-1 font-bold" />
+            <label className="text-xs font-bold">Jumlah Setoran (Auto titik)</label>
+            <div className="relative mb-1">
+              <span className="absolute left-3 top-3 text-sm font-bold text-gray-500">Rp</span>
+              <input
+                type="text"
+                inputMode="numeric"
+                autoFocus
+                value={depositJumlah}
+                onChange={e => setDepositJumlah(formatRupiah(e.target.value))}
+                placeholder="100.000"
+                className="w-full border p-3 pl-10 rounded-lg text-sm mb-1 font-black tracking-wide"
+              />
+            </div>
+            {depositJumlah && <p className="text-[11px] text-green-600 font-bold mb-3">Preview: Rp {depositJumlah}</p>}
             <p className="text-[10px] text-red-500 mb-4">⚠️ Tidak bisa dikurangi manual. Jika mau tarik, harus ajukan ke Owner.</p>
             <div className="flex gap-2">
               <button onClick={() => setShowDeposit(false)} className="flex-1 py-2.5 border rounded-lg text-sm">Batal</button>
@@ -214,8 +225,18 @@ export default function LaciManager({ outletId }) {
             <select value={transfer.dari} onChange={e => setTransfer({...transfer, dari: e.target.value })} className="w-full border p-2 rounded-lg text-sm mb-2"><option value="">Pilih Asal</option>{laci.map(l => <option key={l.id} value={l.id}>{l.nama} (Rp {Number(l.saldo).toLocaleString("id-ID")})</option>)}</select>
             <label className="text-xs font-bold">Ke</label>
             <select value={transfer.ke} onChange={e => setTransfer({...transfer, ke: e.target.value })} className="w-full border p-2 rounded-lg text-sm mb-2"><option value="">Pilih Tujuan</option>{laci.map(l => <option key={l.id} value={l.id}>{l.nama}</option>)}</select>
-            <label className="text-xs font-bold">Jumlah</label>
-            <input type="number" value={transfer.jumlah} onChange={e => setTransfer({...transfer, jumlah: e.target.value })} placeholder="50000" className="w-full border p-2 rounded-lg text-sm mb-4" />
+            <label className="text-xs font-bold">Jumlah (Auto titik)</label>
+            <div className="relative">
+              <span className="absolute left-3 top-2.5 text-sm font-bold text-gray-500">Rp</span>
+              <input
+                type="text"
+                inputMode="numeric"
+                value={transfer.jumlah}
+                onChange={e => setTransfer({...transfer, jumlah: formatRupiah(e.target.value) })}
+                placeholder="50.000"
+                className="w-full border p-2 pl-10 rounded-lg text-sm mb-4 font-bold"
+              />
+            </div>
             <div className="flex gap-2"><button onClick={() => setShowTransfer(false)} className="flex-1 py-2 border rounded-lg text-sm">Batal</button><button onClick={handleTransfer} className="flex-1 py-2 bg-blue-600 text-white rounded-lg text-sm font-bold">Transfer</button></div>
           </div>
         </div>
