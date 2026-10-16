@@ -35,10 +35,18 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
   let mounted = true;
   const init = async () => {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!mounted) return;
-    setSession(session);
-    setUser(session?.user?? null);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!mounted) return;
+      setSession(session);
+      setUser(session?.user?? null);
+      if (!session) {
+        setLoading(false);
+      }
+    } catch (e) {
+      console.error('init session error', e);
+      if (mounted) setLoading(false);
+    }
   };
   init();
   const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
@@ -46,18 +54,26 @@ export const AuthProvider = ({ children }) => {
     setUser(session?.user?? null);
     if (!session) {
       setLoading(false);
+      setProfile(null);
     }
   });
   return () => { mounted = false; subscription.unsubscribe(); };
 }, []);
 
   useEffect(() => {
-  if (!user) { setProfile(null); return; }
+  if (!user) {
+    setProfile(null);
+    setLoading(false);
+    return;
+  }
   const fetchData = async () => {
     try {
-      const { data: profileData } = await supabase.from('profiles').select('*').eq('id', user.id).single();
+      const { data: profileData, error: profileErr } = await supabase.from('profiles').select('*').eq('id', user.id).single();
+      if (profileErr) console.error('profile fetch error', profileErr);
       if (profileData) setProfile(profileData);
-      const { data: outletsData } = await supabase.from('outlets').select('*').order('name');
+
+      const { data: outletsData, error: outletsErr } = await supabase.from('outlets').select('*').order('name');
+      if (outletsErr) console.error('outlets fetch error', outletsErr);
       if (outletsData?.length) {
         setOutlets(outletsData);
         const savedId = localStorage.getItem('activeOutletId');
@@ -67,6 +83,8 @@ export const AuthProvider = ({ children }) => {
           localStorage.setItem('activeOutletId', defaultId);
         }
       }
+    } catch (e) {
+      console.error('fetchData error', e);
     } finally {
       setLoading(false);
     }
@@ -94,15 +112,14 @@ export const AuthProvider = ({ children }) => {
         const employeeName = profile?.full_name || profile?.username || user.email?.split('@')[0] || 'Unknown';
         console.log('ABSENSI START login:', employeeName, 'tanggal', today);
 
-        // 1. Cek ada yang masih kebuka gak (pulang null) - tutup dulu kalau ada
         const { data: openLog } = await supabase
-         .from('attendance_logs')
-         .select('id, jam_asli_masuk')
-         .eq('employee_id', user.id)
-         .is('jam_asli_pulang', null)
-         .order('jam_asli_masuk', { ascending: false })
-         .limit(1)
-         .maybeSingle();
+        .from('attendance_logs')
+        .select('id, jam_asli_masuk')
+        .eq('employee_id', user.id)
+        .is('jam_asli_pulang', null)
+        .order('jam_asli_masuk', { ascending: false })
+        .limit(1)
+        .maybeSingle();
 
         if (openLog) {
           const diffMin = (new Date() - new Date(openLog.jam_asli_masuk)) / 60000;
@@ -119,7 +136,6 @@ export const AuthProvider = ({ children }) => {
           if (closeErr) console.error('ABSENSI close error', closeErr);
         }
 
-        // 2. Selalu bikin BARU setiap login
         const { data: shift } = await supabase.from('shifts').select('*').eq('outlet_id', outletId).eq('employee_id', user.id).order('created_at', { ascending: false }).limit(1).maybeSingle();
         const now = new Date();
         const nowWitaMin = getNowWITAMinutes();
