@@ -10,25 +10,45 @@ const MESSAGES = {
   NOT_AUTHENTICATED: "Sesi habis, silakan login ulang",
 };
 
-const isNetworkError = (e) => !e.code || /fetch|network|load failed/i.test(e.message || "");
+const isNetworkError = (e) => {
+  if (!e) return true;
+  if (e.name === "NotFoundError") return true; // INI KUNCI NYA OWY! ANGGAP OFFLINE BIAR GAK PUTIH
+  return !e.code || /fetch|network|load failed|not found/i.test(e.message || "");
+};
 
 // Single atomic RPC call. Returns { ok, data } | { ok:false, network, code, message, short }
 export async function runCheckout({ outlet_id, items, paid, client_ref }) {
   try {
+    if (!outlet_id || !items) {
+      return { ok: false, message: "Data tidak lengkap" };
+    }
+    
     const { data, error } = await supabase.rpc("checkout", {
       p_outlet_id: outlet_id,
       p_items: items.map((i) => ({ product_id: i.product_id, qty: i.qty })),
       p_paid: paid,
       p_client_ref: client_ref,
     });
+    
     if (!error) return { ok: true, data };
-    if (isNetworkError(error)) return { ok: false, network: true, message: "Offline" };
+    
+    if (isNetworkError(error)) {
+      return { ok: false, network: true, message: "Offline" };
+    }
+    
     let short = null;
     if (error.message === "INSUFFICIENT_STOCK") {
       try { short = JSON.parse(error.details); } catch { short = null; }
     }
+    
     return { ok: false, code: error.message, message: MESSAGES[error.message] || error.message, short };
+    
   } catch (e) {
-    return { ok: false, network: true, message: e.message };
+    console.warn("runCheckout catch:", e);
+    // JANGAN PERNAH BIKIN PUTIH, ANGGAP OFFLINE AJA
+    if (e?.name === "NotFoundError") {
+      return { ok: false, network: true, message: "Offline - DB error" };
+    }
+    return { ok: false, network: true, message: e?.message || "Offline" };
   }
 }
