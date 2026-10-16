@@ -70,7 +70,17 @@ export default function POS() {
   const shift = useShift(activeOutletId);
   const { data: laciBank = [] } = useLaciBank(activeOutletId);
 
-  // --- STATE BARU UNTUK TRANSAKSI BANK ---
+  const formatRupiah = (angka) => {
+  if (!angka) return "";
+  const numberString = angka.replace(/\D/g, "");
+  if (!numberString) return "";
+  return parseInt(numberString, 10).toLocaleString("id-ID");
+};
+const unformatRupiah = (formatted) => {
+  return Number(formatted.replace(/\./g, "").replace(/[^0-9]/g, ""));
+};
+
+// --- STATE BARU UNTUK TRANSAKSI BANK ---
   const [bankLaciId, setBankLaciId] = useState("");
   const [bankTipe, setBankTipe] = useState("masuk"); // masuk = ada transfer masuk, keluar = tarik tunai
   const [bankJumlah, setBankJumlah] = useState("");
@@ -117,7 +127,7 @@ export default function POS() {
         shift: nowShift,
         kasir_email: user?.email,
         tipe: bankTipe,
-        jumlah: Number(bankJumlah.replace(/\D/g,'')),
+        jumlah: unformatRupiah(bankJumlah),
         keterangan: bankKet || `${bankTipe} ${laciBank.find(b=>b.id===bankLaciId)?.nama}`,
       });
       if (error) throw error;
@@ -165,7 +175,7 @@ export default function POS() {
               <SelectContent><SelectItem value="masuk">Masuk (+)</SelectItem><SelectItem value="keluar">Keluar (-)</SelectItem></SelectContent>
             </Select>
           </div>
-          <input type="text" value={bankJumlah} onChange={e=>setBankJumlah(e.target.value)} placeholder="Jumlah Rp (contoh 50000)" className="w-full h-9 px-3 rounded-md border bg-white text-sm" />
+          <input type="text" value={formatRupiah(bankJumlah)} onChange={e=>setBankJumlah(formatRupiah(e.target.value))} placeholder="Jumlah Rp (contoh 50000)" className="w-full h-9 px-3 rounded-md border bg-white text-sm" />
           <input type="text" value={bankKet} onChange={e=>setBankKet(e.target.value)} placeholder="Keterangan (opsional)" className="w-full h-9 px-3 rounded-md border bg-white text-sm" />
           <button onClick={handleBankTx} disabled={bankLoading} className="w-full h-10 rounded-md bg-emerald-600 text-white font-bold text-sm hover:bg-emerald-700 disabled:opacity-50">
             {bankLoading? "Menyimpan..." : `Simpan ${bankTipe.toUpperCase()} - Shift ${shift?.currentShift||""}`}
