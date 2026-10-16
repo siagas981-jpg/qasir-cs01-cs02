@@ -40,15 +40,20 @@ function useMasters() {
 function useLaciBank(outletId) {
   return useQuery({
     queryKey: ["laci-bank", outletId],
-    enabled:!!outletId,
+    enabled: !!outletId,
     queryFn: async () => {
-      const { data, error } = await supabase.from("laci")
-       .select("*")
-       .eq("outlet_id", outletId)
-       .ilike("kode", "LACI_5_%")
-       .order("kode");
-      if (error) throw error;
-      return data || [];
+      try {
+        const { data, error } = await supabase.from("laci")
+         .select("*")
+         .eq("outlet_id", outletId)
+         .ilike("kode", "LACI_5_%")
+         .order("kode");
+        if (error) throw error;
+        return data || [];
+      } catch (e) {
+        console.error("useLaciBank error", e);
+        return [];
+      }
     }
   });
 }
@@ -71,13 +76,15 @@ export default function POS() {
   const { data: laciBank = [] } = useLaciBank(activeOutletId);
 
   const formatRupiah = (angka) => {
-  if (!angka) return "";
-  const numberString = angka.replace(/\D/g, "");
+  if (angka === "" || angka === null || angka === undefined) return "";
+  const str = String(angka);
+  const numberString = str.replace(/\D/g, "");
   if (!numberString) return "";
   return parseInt(numberString, 10).toLocaleString("id-ID");
 };
 const unformatRupiah = (formatted) => {
-  return Number(formatted.replace(/\./g, "").replace(/[^0-9]/g, ""));
+  if (!formatted) return 0;
+  return Number(String(formatted).replace(/\./g, "").replace(/[^0-9]/g, "")) || 0;
 };
 
 // --- STATE BARU UNTUK TRANSAKSI BANK ---
