@@ -1,4 +1,5 @@
 import SaldoShiftCard from "../saldo/SaldoShiftCard.jsx"
+import Laci5InfoKasir from "../laci/Laci5InfoKasir.jsx"
 import { Minus, Plus, ShoppingBag, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { rupiah } from "@/lib/format";
@@ -36,8 +37,9 @@ export function CartPanel({ cart, stockOf, onCheckout, disabled }) {
         )}
       </div>
       <SaldoShiftCard />
+      <Laci5InfoKasir />
       <div className="flex-1 overflow-y-auto min-h-[120px]">
-      {cart.items.length === 0 ? (
+      {cart.items.length === 0? (
           <div className="h-full grid place-items-center text-center py-10" data-testid="cart-empty">
             <p className="text-sm text-muted-foreground">Ketuk produk untuk menambah ke keranjang.</p>
           </div>
