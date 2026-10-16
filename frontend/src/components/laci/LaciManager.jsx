@@ -14,7 +14,6 @@ export default function LaciManager({ outletId }) {
   const [newJenis, setNewJenis] = useState("cash")
   const [transfer, setTransfer] = useState({ dari: "", ke: "", jumlah: "" })
 
-  // === FORMATTER RUPIAH ===
   const formatRupiah = (angka) => {
     if (!angka) return "";
     const numberString = angka.replace(/\D/g, "");
@@ -125,6 +124,9 @@ export default function LaciManager({ outletId }) {
   const laciInduk = laci.filter(l =>!l.parent_id)
   const laci5 = laci.find(l => l.kode === 'LACI_5')
   const anakLaci5 = laci5? laci.filter(l => l.parent_id === laci5.id) : []
+  // === FIX AKUMULASI OTOMATIS LACI 5 ===
+  const totalLaci5 = anakLaci5.reduce((sum, anak) => sum + Number(anak.saldo || 0), 0)
+
   const displayList = laciInduk.length > 0? laciInduk : laci.filter(l => ['LACI_1', 'LACI_2', 'LACI_5'].includes(l.kode))
   const currentShift = getCurrentShift()
   const businessDate = getBusinessDate()
@@ -153,22 +155,28 @@ export default function LaciManager({ outletId }) {
         {displayList.map(item => {
           const check = canInputDeposit(item.kode)
           const sudah = dailyDeposits.find(d => d.laci_kode === item.kode)
+          const isLaci5 = item.kode === 'LACI_5'
+          // SALDO YANG DITAMPILKAN: Kalau Laci 5, pakai akumulasi otomatis
+          const saldoTampil = isLaci5? totalLaci5 : Number(item.saldo)
           return (
             <div key={item.id} onClick={() => handleOpenDeposit(item)} className={`border rounded-xl p-3 bg-white shadow-sm transition-all ${check.allowed? 'cursor-pointer hover:border-green-500 hover:shadow-md active:scale-[0.99]' : 'cursor-not-allowed opacity-80 bg-slate-50'}`}>
               <div className="flex justify-between">
-                <div className="text-[10px] tracking-widest opacity-60">{item.kode} • {item.jenis?.toUpperCase()}</div>
+                <div className="text-[10px] tracking-widest opacity-60">{item.kode} • {item.jenis?.toUpperCase()} {isLaci5 && '(AKUMULASI OTOMATIS)'}</div>
                 <div className={`text-[9px] px-2 py-0.5 rounded-full font-bold ${check.allowed? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{check.allowed? 'BISA INPUT' : 'TERKUNCI'}</div>
               </div>
               <div className="font-bold text-sm mt-1">{item.nama}</div>
-              <div className="text-xl font-black mt-2">Rp {Number(item.saldo).toLocaleString("id-ID")}</div>
+              <div className="text-xl font-black mt-2">Rp {saldoTampil.toLocaleString("id-ID")}</div>
+              {isLaci5 && <div className="text-[10px] text-green-600 font-bold">Total BNI+BRI+MANDIRI+E-Wallet (Auto)</div>}
               <div className="mt-2 text-[11px] h-8">
                 {sudah? <span className="text-green-600 font-bold">✅ Sudah setor Rp {Number(sudah.jumlah).toLocaleString("id-ID")} - Reset 01:00</span> : check.allowed? <span className="text-blue-600 font-bold">👆 Klik untuk input manual 1x hari ini</span> : <span className="text-red-500">{check.reason.slice(0, 90)}...</span>}
               </div>
-              {item.kode === 'LACI_5' && (
+              {isLaci5 && (
                 <div className="mt-3 pt-3 border-t space-y-2">
+                  <div className="text-[10px] font-bold opacity-60 mb-1">RINCIAN SALDO PER BANK (OTOMATIS SENDIRI):</div>
                   {anakLaci5.map(anak => (
-                    <div key={anak.id} className="flex justify-between bg-slate-50 p-2 rounded-lg"><span className="text-xs font-bold">{anak.nama}</span><span className="text-xs">Rp {Number(anak.saldo).toLocaleString("id-ID")}</span></div>
+                    <div key={anak.id} className="flex justify-between bg-slate-50 p-2 rounded-lg border"><span className="text-xs font-bold">{anak.nama}</span><span className="text-xs font-black">Rp {Number(anak.saldo).toLocaleString("id-ID")}</span></div>
                   ))}
+                  {anakLaci5.length === 0 && <div className="text-xs opacity-50">Belum ada bank di Laci 5</div>}
                 </div>
               )}
             </div>
