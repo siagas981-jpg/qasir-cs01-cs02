@@ -200,15 +200,15 @@ export default function AppShell() {
                   cur.scrollLeft = scrollLeftRef.current - walk;
                 } catch {}
               }}
-            >
-              {NAV.filter((n) =>!n.owner ||!!isOwner).map((n) => (
-                <NavLink key={n.to} to={n.to} end={n.end} data-testid={n.id}
-                  className={({ isActive }) => `whitespace-nowrap rounded-md px-3 py-2 text-sm font-semibold transition-colors inline-flex items-center gap-1.5 shrink-0 ${isActive? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"}`}>
-                  {n.icon && <n.icon className="h-4 w-4" />}{n.label}
-                </NavLink>
-              ))}
-            </nav>
-            {showTrack && (
+                  >
+        {(Array.isArray(NAV) ? NAV : []).filter((n)=> n && (n.owner || !isOwner)).map((n) => (
+          <NavLink key={n.to} to={n.to} end={n.end} data-testid={n.id}
+            className={({ isActive }) => `whitespace-nowrap rounded-md px-3 py-2 text-sm font-semibold transition-colors inline-flex items-center gap-1.5 shrink-0 ${isActive? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"}`}>
+            {n.icon && <n.icon className="h-4 w-4" />}{n.label}
+          </NavLink>
+        ))}
+      </nav>
+      {showTrack && (
               <div onMouseDown={onTrackMouseDown} className="relative mt-1 h-2 w-full bg-slate-200 rounded-full cursor-pointer group">
                 <div onMouseDown={onThumbMouseDown} className={`absolute top-0 h-full bg-slate-900 rounded-full hover:bg-black transition-colors ${dragging? "bg-black h-[8px] -top-[1px]" : ""}`} style={{ width: `${thumb.width}px`, left: `${thumb.left}px` }} />
               </div>
