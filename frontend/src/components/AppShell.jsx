@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, Component } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import { LogOut, Store, Users, Boxes, BarChart3, BookOpen, Truck, ShoppingCart, Archive } from "lucide-react";
 import { toast } from "sonner";
@@ -22,35 +22,47 @@ const NAV = [
   { to: "/dashboard/arsip", label: "Arsip", id: "nav-archive", owner: true, icon: Archive },
 ];
 
-function StatusBadge({ online, healthy }) {
-  try {
-    const ok = online && healthy !== false;
-    return (
-      <span data-testid="supabase-sync-status-badge" className="inline-flex items-center gap-1.5 text-xs font-medium">
-        <span className={`h-2 w-2 rounded-full ${ok ? "bg-emerald-500" : "bg-rose-500"} ${ok ? "" : "animate-pulse"}`} />
-        <span className="hidden sm:inline">{!online ? "Offline" : healthy === false ? "Supabase error" : "Online"}</span>
-      </span>
-    );
-  } catch { return <span className="text-xs">Online</span>; }
-}
-
-function SafeOutlet() {
-  try {
-    return <Outlet />;
-  } catch (e) {
-    return <div className="p-10 text-center">Gagal load halaman, coba refresh.<br/><button onClick={()=>window.location.reload()} className="mt-4 px-4 py-2 bg-black text-white rounded">Refresh</button></div>;
+// ERROR BOUNDARY ANTI LAYAR PUTIH
+class OutletErrorBoundary extends Component {
+  constructor(props){ super(props); this.state={hasError:false, error:null}; }
+  static getDerivedStateFromError(error){ return {hasError:true, error}; }
+  componentDidCatch(error, info){ console.error("Outlet CRASH:", error, info); }
+  render(){
+    if(this.state.hasError){
+      return (
+        <div className="p-10 text-center">
+          <h2 className="text-lg font-bold text-rose-600">Halaman ini error, tapi AppShell aman!</h2>
+          <p className="mt-2 text-sm font-mono bg-slate-100 p-2 rounded text-left whitespace-pre-wrap">{String(this.state.error?.message || this.state.error)}</p>
+          <p className="mt-1 text-xs text-slate-500">{String(this.state.error?.stack || "").slice(0,500)}</p>
+          <div className="mt-4 flex gap-2 justify-center">
+            <button onClick={()=>{localStorage.clear(); sessionStorage.clear(); try{indexedDB.deleteDatabase('qasir_offline_db')}catch{}; location.reload()}} className="px-4 py-2 bg-rose-600 text-white rounded">Bersihkan Cache & Reload</button>
+            <button onClick={()=>this.setState({hasError:false, error:null})} className="px-4 py-2 bg-black text-white rounded">Coba Lagi</button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
   }
 }
 
+function StatusBadge({ online, healthy }) {
+  const ok = online && healthy !== false;
+  return (
+    <span className="inline-flex items-center gap-1.5 text-xs font-medium">
+      <span className={`h-2 w-2 rounded-full ${ok ? "bg-emerald-500" : "bg-rose-500"} ${ok ? "" : "animate-pulse"}`} />
+      <span className="hidden sm:inline">{!online ? "Offline" : healthy === false ? "Supabase error" : "Online"}</span>
+    </span>
+  );
+}
+
 export default function AppShell() {
-  const { user, profile, isOwner } = useAuth();
+  const { user, profile, isOwner, signOut } = useAuth();
   const { online, healthy, queue } = useConnection();
   const scrollRef = useRef(null);
   const [showTrack, setShowTrack] = useState(false);
   const [thumb, setThumb] = useState({ width: 0, left: 0 });
   const [dragging, setDragging] = useState(false);
 
-  // FIX ANTI-CACHE PUTIH MODE BIASA = MODE SAMARAN
   useEffect(() => {
     try {
       if ('serviceWorker' in navigator) {
@@ -61,10 +73,6 @@ export default function AppShell() {
         localStorage.removeItem('qasir.offlineQueue.v1');
         try { indexedDB.deleteDatabase('qasir_offline_db'); } catch {}
         localStorage.setItem('qasir.cache.version', 'v3-final');
-      }
-      const appVer = localStorage.getItem('app_version');
-      if (appVer !== 'v2-fix-filter') {
-        localStorage.setItem('app_version', 'v2-fix-filter');
       }
     } catch {}
   }, []);
@@ -78,9 +86,7 @@ export default function AppShell() {
         if (cancelled) return;
         if (r?.synced) toast.success(`${r.synced} transaksi offline tersinkron`);
         if (r?.failed) toast.error(`${r.failed} transaksi offline ditolak`);
-      } catch (e) {
-        console.warn("flushQueue diamankan:", e?.message);
-      }
+      } catch (e) { console.warn("flushQueue:", e?.message); }
     };
     run();
     return () => { cancelled = true; };
@@ -103,31 +109,25 @@ export default function AppShell() {
   };
 
   useEffect(() => {
-    try {
-      updateThumb();
-      const el = scrollRef.current;
-      if (!el) return;
-      el.addEventListener("scroll", updateThumb);
-      window.addEventListener("resize", updateThumb);
-      return () => {
-        try {
-          el.removeEventListener("scroll", updateThumb);
-          window.removeEventListener("resize", updateThumb);
-        } catch {}
-      };
-    } catch {}
+    updateThumb();
+    const el = scrollRef.current;
+    if (!el) return;
+    el.addEventListener("scroll", updateThumb);
+    window.addEventListener("resize", updateThumb);
+    return () => {
+      el.removeEventListener("scroll", updateThumb);
+      window.removeEventListener("resize", updateThumb);
+    };
   }, []);
 
   const onTrackMouseDown = (e) => {
     const el = scrollRef.current;
     if (!el) return;
-    try {
-      const trackRect = e.currentTarget.getBoundingClientRect();
-      const clickX = e.clientX - trackRect.left;
-      const { scrollWidth, clientWidth } = el;
-      const ratio = clickX / trackRect.width;
-      el.scrollLeft = ratio * (scrollWidth - clientWidth);
-    } catch {}
+    const trackRect = e.currentTarget.getBoundingClientRect();
+    const clickX = e.clientX - trackRect.left;
+    const { scrollWidth, clientWidth } = el;
+    const ratio = clickX / trackRect.width;
+    el.scrollLeft = ratio * (scrollWidth - clientWidth);
   };
 
   const onThumbMouseDown = (e) => {
@@ -140,13 +140,11 @@ export default function AppShell() {
     const trackWidth = el?.clientWidth || 0;
     const { scrollWidth, clientWidth } = el;
     const onMove = (ev) => {
-      try {
-        const dx = ev.clientX - startX;
-        const newLeft = Math.min(Math.max(startLeft + dx, 0), trackWidth - thumb.width);
-        const maxThumb = trackWidth - thumb.width;
-        const ratio = maxThumb > 0 ? newLeft / maxThumb : 0;
-        el.scrollLeft = ratio * (scrollWidth - clientWidth);
-      } catch {}
+      const dx = ev.clientX - startX;
+      const newLeft = Math.min(Math.max(startLeft + dx, 0), trackWidth - thumb.width);
+      const maxThumb = trackWidth - thumb.width;
+      const ratio = maxThumb > 0 ? newLeft / maxThumb : 0;
+      el.scrollLeft = ratio * (scrollWidth - clientWidth);
     };
     const onUp = () => {
       setDragging(false);
@@ -160,11 +158,8 @@ export default function AppShell() {
   const isDownRef = useRef(false);
   const startXRef = useRef(0);
   const scrollLeftRef = useRef(0);
-  const { signOut } = useAuth();
 
-  if (!user) {
-    return <div className="min-h-screen grid place-items-center p-10">Loading akun...</div>;
-  }
+  if (!user) return <div className="min-h-screen grid place-items-center p-10">Loading akun...</div>;
 
   return (
     <div className="min-h-screen bg-[#F8FAFC]">
@@ -175,37 +170,12 @@ export default function AppShell() {
             <span className="font-heading text-lg font-extrabold tracking-tight hidden sm:block">CS Qasir</span>
           </div>
           <div className="flex-1 min-w-0 flex flex-col justify-center">
-            <nav
-              ref={scrollRef}
-              className="flex items-center gap-1 overflow-x-auto scrollbar-none select-none cursor-grab active:cursor-grabbing"
-              style={{ scrollbarWidth: "none" }}
-              onMouseDown={(e) => {
-                try {
-                  const cur = scrollRef.current;
-                  if (!cur) return;
-                  isDownRef.current = true;
-                  startXRef.current = e.pageX - (cur.offsetLeft || 0);
-                  scrollLeftRef.current = cur.scrollLeft;
-                } catch {}
-              }}
-              onMouseLeave={() => (isDownRef.current = false)}
-              onMouseUp={() => (isDownRef.current = false)}
-              onMouseMove={(e) => {
-                if (!isDownRef.current) return;
-                try {
-                  e.preventDefault();
-                  const cur = scrollRef.current;
-                  if (!cur) return;
-                  const x = e.pageX - (cur.offsetLeft || 0);
-                  const walk = (x - startXRef.current) * 1.5;
-                  cur.scrollLeft = scrollLeftRef.current - walk;
-                } catch {}
-              }}
-            >
-              {/* FIX UTAMA ANTI PUTIH - LOGIKA DIBALIK! */}
+            <nav ref={scrollRef} className="flex items-center gap-1 overflow-x-auto scrollbar-none select-none cursor-grab active:cursor-grabbing" style={{ scrollbarWidth: "none" }}
+              onMouseDown={(e) => { const cur = scrollRef.current; if (!cur) return; isDownRef.current = true; startXRef.current = e.pageX - (cur.offsetLeft || 0); scrollLeftRef.current = cur.scrollLeft; }}
+              onMouseLeave={() => (isDownRef.current = false)} onMouseUp={() => (isDownRef.current = false)}
+              onMouseMove={(e) => { if (!isDownRef.current) return; e.preventDefault(); const cur = scrollRef.current; if (!cur) return; const x = e.pageX - (cur.offsetLeft || 0); const walk = (x - startXRef.current) * 1.5; cur.scrollLeft = scrollLeftRef.current - walk; }}>
               {(Array.isArray(NAV) ? NAV : []).filter((n) => n && (!n.owner || isOwner)).map((n) => (
-                <NavLink key={n.to} to={n.to} end={n.end} data-testid={n.id}
-                  className={({ isActive }) => `whitespace-nowrap rounded-md px-3 py-2 text-sm font-semibold transition-colors inline-flex items-center gap-1.5 shrink-0 ${isActive ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"}`}>
+                <NavLink key={n.to} to={n.to} end={n.end} data-testid={n.id} className={({ isActive }) => `whitespace-nowrap rounded-md px-3 py-2 text-sm font-semibold transition-colors inline-flex items-center gap-1.5 shrink-0 ${isActive ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"}`}>
                   {n.icon && <n.icon className="h-4 w-4" />}{n.label}
                 </NavLink>
               ))}
@@ -221,17 +191,19 @@ export default function AppShell() {
             <StatusBadge online={online} healthy={healthy} />
             <QueueSheet queue={queue || []} online={!!online} />
             <div className="hidden lg:flex flex-col items-end leading-tight">
-              <span className="text-xs font-semibold" data-testid="header-user-email">{user?.email || "-"}</span>
-              <span className="text-[10px] uppercase tracking-wider text-emerald-700 font-bold" data-testid="header-user-role">{profile?.role || "loading..."}</span>
+              <span className="text-xs font-semibold">{user?.email || "-"}</span>
+              <span className="text-[10px] uppercase tracking-wider text-emerald-700 font-bold">{profile?.role || "loading..."}</span>
             </div>
-            <button onClick={signOut} data-testid="logout-button" className="rounded-md p-2 text-slate-600 hover:bg-slate-900 hover:text-white transition-colors" aria-label="Keluar">
-              <LogOut className="h-4 w-4" />
-            </button>
+            <button onClick={signOut} className="rounded-md p-2 text-slate-600 hover:bg-slate-900 hover:text-white transition-colors"><LogOut className="h-4 w-4" /></button>
           </div>
         </div>
         <div className="md:hidden border-t px-4 py-2"><OutletSwitcher /></div>
       </header>
-      <main><SafeOutlet /></main>
+      <main>
+        <OutletErrorBoundary>
+          <Outlet />
+        </OutletErrorBoundary>
+      </main>
     </div>
   );
 }
