@@ -1,4 +1,4 @@
-// FIX ANTI NotFoundError + LENGKAP EXPORT
+// FIX LENGKAP - SEMUA NAMA EXPORT ADA BIAR GAK FAILED LAGI
 const DB_NAME = 'qasir_offline_db';
 const STORE_NAME = 'offline_queue';
 
@@ -24,7 +24,7 @@ async function safeOperation(fn, fallback = null) {
   try {
     return await fn();
   } catch (err) {
-    if (err?.name === 'NotFoundError' || err?.message?.includes('not be found') || err?.message?.includes('not found')) {
+    if (err?.name === 'NotFoundError' || (err?.message && err.message.toLowerCase().includes('not found'))) {
       console.warn('DB rusak, reset otomatis...');
       try { indexedDB.deleteDatabase(DB_NAME); } catch {}
       try { localStorage.removeItem('qasir.offlineQueue.v1'); } catch {}
@@ -65,7 +65,6 @@ export async function clearQueue() {
   }, null);
 }
 
-// INI YANG BIKIN BUILD FAIL KEMARIN - SEKARANG UDAH ADA!
 export async function retryEntry(id) {
   return safeOperation(async () => {
     const db = await openDB();
@@ -90,6 +89,12 @@ export async function removeEntry(id) {
   }, null);
 }
 
+// INI YANG BIKIN FAIL SEKARANG - ALIAS BIAR COMPATIBLE
+export const removeFromQueue = removeEntry;
+export const deleteFromQueue = removeEntry;
+export const deleteQueueEntry = removeEntry;
+export const removeQueueItem = removeEntry;
+
 export async function flushQueue() {
   try {
     const queue = await getQueue();
@@ -100,5 +105,4 @@ export async function flushQueue() {
   }
 }
 
-// biar aman kalau ada yang import default
-export default { getQueue, addToQueue, clearQueue, retryEntry, removeEntry, flushQueue };
+export default { getQueue, addToQueue, clearQueue, retryEntry, removeEntry, removeFromQueue, flushQueue };
