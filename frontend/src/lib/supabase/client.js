@@ -11,7 +11,6 @@ if (!url || !anonKey) {
   });
 }
 
-// STORAGE ANTI PUTIH V2 - TIDAK PERNAH HAPUS DATA!
 const safeStorage = {
   _memory: {},
   getItem(key) {
@@ -19,7 +18,6 @@ const safeStorage = {
       return localStorage.getItem(key);
     } catch (e) {
       console.warn("safeStorage getItem skip:", e?.name, key);
-      // JANGAN HAPUS APA PUN! PAKAI MEMORY AJA BIAR GAK PUTIH!
       return this._memory[key] || null;
     }
   },
@@ -29,7 +27,6 @@ const safeStorage = {
       this._memory[key] = value;
     } catch (e) {
       console.warn("safeStorage setItem skip:", e?.name, key);
-      // JANGAN CRASH, SIMPEN DI MEMORY AJA!
       this._memory[key] = value;
     }
   },
@@ -43,9 +40,6 @@ const safeStorage = {
     }
   }
 };
-
-// JANGAN HAPUS DATABASE OTOMATIS! ITU BIKIN PUTIH & HILANG TRANSAKSI!
-// Biarkan saja, yang error kita skip aja
 
 export const supabase = createClient(
   url || "https://placeholder.supabase.co",
