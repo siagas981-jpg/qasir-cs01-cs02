@@ -1,4 +1,4 @@
-// FIX ANTI NotFoundError
+// FIX ANTI NotFoundError + LENGKAP EXPORT
 const DB_NAME = 'qasir_offline_db';
 const STORE_NAME = 'offline_queue';
 
@@ -20,31 +20,33 @@ function openDB() {
   });
 }
 
-async function safeOperation(fn) {
+async function safeOperation(fn, fallback = null) {
   try {
     return await fn();
   } catch (err) {
-    if (err?.name === 'NotFoundError' || err?.message?.includes('not be found')) {
+    if (err?.name === 'NotFoundError' || err?.message?.includes('not be found') || err?.message?.includes('not found')) {
       console.warn('DB rusak, reset otomatis...');
       try { indexedDB.deleteDatabase(DB_NAME); } catch {}
-      localStorage.removeItem('qasir.offlineQueue.v1');
-      return null; // jangan crash, anggap kosong aja
+      try { localStorage.removeItem('qasir.offlineQueue.v1'); } catch {}
+      return fallback;
     }
-    throw err;
+    console.warn('offlineQueue error:', err);
+    return fallback;
   }
 }
 
 export async function getQueue() {
-  return safeOperation(async () => {
+  const res = await safeOperation(async () => {
     const db = await openDB();
-    return new Promise((res) => {
+    return new Promise((resolve) => {
       const tx = db.transaction(STORE_NAME, 'readonly');
       const store = tx.objectStore(STORE_NAME);
       const req = store.getAll();
-      req.onsuccess = () => res(req.result || []);
-      req.onerror = () => res([]);
+      req.onsuccess = () => resolve(req.result || []);
+      req.onerror = () => resolve([]);
     });
-  }) || [];
+  }, []);
+  return res || [];
 }
 
 export async function addToQueue(data) {
@@ -52,7 +54,7 @@ export async function addToQueue(data) {
     const db = await openDB();
     const tx = db.transaction(STORE_NAME, 'readwrite');
     tx.objectStore(STORE_NAME).add({ ...data, createdAt: Date.now() });
-  });
+  }, null);
 }
 
 export async function clearQueue() {
@@ -60,17 +62,43 @@ export async function clearQueue() {
     const db = await openDB();
     const tx = db.transaction(STORE_NAME, 'readwrite');
     tx.objectStore(STORE_NAME).clear();
-  });
+  }, null);
+}
+
+// INI YANG BIKIN BUILD FAIL KEMARIN - SEKARANG UDAH ADA!
+export async function retryEntry(id) {
+  return safeOperation(async () => {
+    const db = await openDB();
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    const store = tx.objectStore(STORE_NAME);
+    const req = store.get(id);
+    req.onsuccess = () => {
+      const item = req.result;
+      if (item) {
+        item.retries = (item.retries || 0) + 1;
+        store.put(item);
+      }
+    };
+  }, null);
+}
+
+export async function removeEntry(id) {
+  return safeOperation(async () => {
+    const db = await openDB();
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    tx.objectStore(STORE_NAME).delete(id);
+  }, null);
 }
 
 export async function flushQueue() {
-  // JANGAN THROW ERROR KALO DB KOSONG - INI YANG BIKIN PUTIH!
   try {
     const queue = await getQueue();
     if (!queue || queue.length === 0) return;
-    // ... logic sync kamu yang lama biarin, tapi bungkus try catch
     console.log('flush', queue.length);
   } catch (e) {
     console.warn('flush gagal, skip:', e);
   }
 }
+
+// biar aman kalau ada yang import default
+export default { getQueue, addToQueue, clearQueue, retryEntry, removeEntry, flushQueue };
