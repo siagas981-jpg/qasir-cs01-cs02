@@ -1,212 +1,140 @@
-// VERSI LENGKAP 120 BARIS - ANTI PUTIH + ANTI e.filter ERROR - RESTORE FITUR OFFLINE
+import { runCheckout } from "@/lib/checkout";
+
+const KEY = "qasir.offlineQueue.v1";
+export const QUEUE_EVENT = "qasir-queue";
+export const OFFLINE_QUEUE_EVENT = QUEUE_EVENT;
+export const QUEUE_EVENTS = { UPDATED: QUEUE_EVENT, ADD: 'add', REMOVE: 'remove', RETRY: 'retry' };
 export const DB_NAME = 'qasir_offline_db';
 export const STORE_NAME = 'offline_queue';
-export const QUEUE_EVENT = 'qasir:queue:update';
-export const OFFLINE_QUEUE_EVENT = QUEUE_EVENT;
-export const OFFLINE_EVENT = QUEUE_EVENT;
-export const SYNC_EVENT = 'qasir:sync';
-export const QUEUE_EVENTS = {
-  UPDATED: QUEUE_EVENT,
-  ADD: 'qasir:queue:add',
-  REMOVE: 'qasir:queue:remove',
-  RETRY: 'qasir:queue:retry',
-  CLEAR: 'qasir:queue:clear',
-  SYNC: 'qasir:queue:sync',
-  FAILED: 'qasir:queue:failed'
+
+// STORAGE ANTI PUTIH - JANGAN PERNAH HAPUS! - DITAMBAH ANTI FILTER ERROR
+const _memory = { queue: [] };
+
+function ensureArray(data) {
+  if (!data) return [];
+  if (Array.isArray(data)) return data;
+  if (typeof data === 'object') {
+    // Kalau object, bungkus jadi array biar .filter gak error!
+    if (data.client_ref) return [data];
+    if (Object.keys(data).length > 0) return Object.values(data).filter(v => v && typeof v === 'object');
+    return [];
+  }
+  return [];
+}
+
+export const getQueue = () => {
+  try { 
+    const raw = localStorage.getItem(KEY);
+    if (!raw) return _memory.queue || [];
+    const parsed = JSON.parse(raw);
+    // FIX UTAMA e.filter ERROR: PASTIKAN SELALU ARRAY!
+    const safeArray = ensureArray(parsed);
+    _memory.queue = safeArray;
+    return safeArray; 
+  } catch (e) {
+    console.warn("getQueue skip error, pakai memory:", e?.name);
+    // JANGAN HAPUS! PAKAI MEMORY AJA BIAR GAK PUTIH & TRANSAKSI GAK HILANG!
+    return ensureArray(_memory.queue);
+  }
 };
 
-function openDB() {
-  return new Promise((resolve, reject) => {
-    try {
-      const request = indexedDB.open(DB_NAME, 2);
-      
-      request.onupgradeneeded = (event) => {
-        const db = event.target.result;
-        // Hapus store lama kalau ada yang corrupt
-        if (db.objectStoreNames.contains(STORE_NAME)) {
-          try { db.deleteObjectStore(STORE_NAME); } catch {}
-        }
-        if (db.objectStoreNames.contains('offlineQueue')) {
-          try { db.deleteObjectStore('offlineQueue'); } catch {}
-        }
-        const store = db.createObjectStore(STORE_NAME, { keyPath: 'id', autoIncrement: true });
-        store.createIndex('createdAt', 'createdAt', { unique: false });
-        store.createIndex('retries', 'retries', { unique: false });
-      };
-      
-      request.onsuccess = (event) => resolve(event.target.result);
-      request.onerror = (event) => reject(event.target.error);
-      request.onblocked = () => {
-        console.warn('DB blocked, coba delete');
-        try { indexedDB.deleteDatabase(DB_NAME); } catch {}
-        reject(new Error('DB blocked'));
-      };
-    } catch (err) {
-      reject(err);
-    }
-  });
-}
-
-async function safeOperation(operation, fallbackValue = []) {
+const save = (q) => {
   try {
-    const result = await operation();
-    // FIX UNTUK ERROR e.filter is not a function - PASTIKAN ARRAY!
-    if (Array.isArray(fallbackValue) && !Array.isArray(result)) {
-      if (result == null) return fallbackValue;
-      if (typeof result === 'object') return [result];
-      return fallbackValue;
-    }
-    return result ?? fallbackValue;
-  } catch (error) {
-    const msg = String(error?.message || '').toLowerCase();
-    const name = error?.name || '';
-    
-    // INI FIX UNTUK NotFoundError YANG BIKIN PUTIH DI FOTO PERTAMA KAMU
-    if (name === 'NotFoundError' || msg.includes('not found') || msg.includes('not be found') || msg.includes('object can not be found')) {
-      console.warn('[offlineQueue] DB corrupt, reset otomatis...');
-      try { indexedDB.deleteDatabase(DB_NAME); } catch {}
-      try { localStorage.removeItem('qasir.offlineQueue.v1'); } catch {}
-      try { localStorage.removeItem('qasir.offlineQueue'); } catch {}
-      return fallbackValue;
-    }
-    
-    console.warn('[offlineQueue] error (skip):', error);
-    return fallbackValue; // JANGAN THROW - RETURN FALLBACK BIAR GAK PUTIH!
+    const safeQ = ensureArray(q);
+    _memory.queue = safeQ;
+    localStorage.setItem(KEY, JSON.stringify(safeQ));
+    window.dispatchEvent(new Event(QUEUE_EVENT));
+  } catch (e) {
+    console.warn("save queue skip, simpan memory:", e?.name);
+    _memory.queue = ensureArray(q);
+    try { window.dispatchEvent(new Event(QUEUE_EVENT)); } catch {}
   }
-}
+};
 
-function dispatchQueueEvent() {
+export const enqueue = (entry) => {
   try {
-    if (typeof window !== 'undefined' && window.dispatchEvent) {
-      window.dispatchEvent(new CustomEvent(QUEUE_EVENT));
-      window.dispatchEvent(new CustomEvent(OFFLINE_QUEUE_EVENT));
+    if (!entry || !entry.client_ref) return;
+    const current = ensureArray(getQueue());
+    // FIX: pakai ensureArray sebelum filter!
+    const filtered = current.filter((e) => e && e.client_ref !== entry.client_ref);
+    save([...filtered, { ...entry, status: "pending", error: null }]);
+  } catch (e) { console.warn("enqueue skip:", e?.name); }
+};
+
+export const removeFromQueue = (ref) => {
+  try {
+    if (!ref) return;
+    const current = ensureArray(getQueue());
+    save(current.filter((e) => e && e.client_ref !== ref));
+  } catch (e) { console.warn("remove skip:", e?.name); }
+};
+
+const patch = (ref, fields) => {
+  try {
+    if (!ref) return;
+    const current = ensureArray(getQueue());
+    save(current.map((e) => (e && e.client_ref === ref ? { ...e, ...fields } : e)));
+  } catch (e) { console.warn("patch skip:", e?.name); }
+};
+
+let flushing = false;
+
+export async function flushQueue(userId) {
+  if (flushing || !navigator.onLine || !userId) return { synced: 0, failed: 0 };
+  flushing = true;
+  let synced = 0;
+  let failed = 0;
+  try {
+    const allQueue = ensureArray(getQueue());
+    const queue = allQueue.filter((x) => x && x.user_id === userId && x.status === "pending");
+    for (const e of queue) {
+      try {
+        const res = await runCheckout(e);
+        if (res.ok) { removeFromQueue(e.client_ref); synced++; }
+        else if (res.network) break;
+        else { patch(e.client_ref, { status: "failed", error: res.message }); failed++; }
+      } catch (err) {
+        console.warn("runCheckout error skip:", err?.name);
+        patch(err?.client_ref || e.client_ref, { status: "failed", error: "DB error, skip" });
+        failed++;
+        continue;
+      }
     }
-  } catch {}
+  } catch (e) {
+    console.warn("flushQueue global skip:", e?.name);
+  } finally {
+    flushing = false;
+  }
+  return { synced, failed };
 }
 
-export async function getQueue() {
-  return safeOperation(async () => {
-    const db = await openDB();
-    return new Promise((resolve) => {
-      try {
-        const tx = db.transaction(STORE_NAME, 'readonly');
-        const store = tx.objectStore(STORE_NAME);
-        const req = store.getAll();
-        req.onsuccess = () => {
-          const result = req.result;
-          // PASTIKAN SELALU ARRAY - FIX e.filter error
-          if (!result) return resolve([]);
-          if (!Array.isArray(result)) return resolve([result]);
-          resolve(result);
-        };
-        req.onerror = () => resolve([]);
-      } catch { resolve([]); }
-    });
-  }, []);
-}
+export const retryEntry = (ref) => {
+  try {
+    patch(ref, { status: "pending", error: null });
+  } catch (e) { console.warn("retry skip:", e?.name); }
+};
 
-export async function addToQueue(data) {
-  return safeOperation(async () => {
-    if (!data) return [];
-    const db = await openDB();
-    return new Promise((resolve) => {
-      try {
-        const tx = db.transaction(STORE_NAME, 'readwrite');
-        const store = tx.objectStore(STORE_NAME);
-        const item = { ...data, createdAt: Date.now(), retries: 0 };
-        const req = store.add(item);
-        req.onsuccess = () => { dispatchQueueEvent(); resolve([item]); };
-        req.onerror = () => resolve([]);
-      } catch { resolve([]); }
-    });
-  }, []);
-}
-
-export async function clearQueue() {
-  return safeOperation(async () => {
-    const db = await openDB();
-    return new Promise((resolve) => {
-      try {
-        const tx = db.transaction(STORE_NAME, 'readwrite');
-        const req = tx.objectStore(STORE_NAME).clear();
-        req.onsuccess = () => { dispatchQueueEvent(); resolve([]); };
-        req.onerror = () => resolve([]);
-      } catch { resolve([]); }
-    });
-  }, []);
-}
-
-export async function retryEntry(id) {
-  return safeOperation(async () => {
-    const db = await openDB();
-    return new Promise((resolve) => {
-      try {
-        const tx = db.transaction(STORE_NAME, 'readwrite');
-        const store = tx.objectStore(STORE_NAME);
-        const getReq = store.get(id);
-        getReq.onsuccess = () => {
-          const item = getReq.result;
-          if (item) {
-            item.retries = (item.retries || 0) + 1;
-            item.lastRetry = Date.now();
-            store.put(item);
-          }
-          dispatchQueueEvent();
-          resolve([]);
-        };
-        getReq.onerror = () => resolve([]);
-      } catch { resolve([]); }
-    });
-  }, []);
-}
-
-export async function removeEntry(id) {
-  return safeOperation(async () => {
-    const db = await openDB();
-    return new Promise((resolve) => {
-      try {
-        const tx = db.transaction(STORE_NAME, 'readwrite');
-        const req = tx.objectStore(STORE_NAME).delete(id);
-        req.onsuccess = () => { dispatchQueueEvent(); resolve([]); };
-        req.onerror = () => resolve([]);
-      } catch { resolve([]); }
-    });
-  }, []);
-}
-
-export async function flushQueue() {
-  return safeOperation(async () => {
-    const queue = await getQueue();
-    if (!queue || queue.length === 0) return [];
-    console.log('[offlineQueue] flush', queue.length, 'items');
-    return queue;
-  }, []);
-}
-
-// SEMUA ALIAS BIAR BUILD GAK FAIL LAGI - KOMPATIBEL SAMA KODE LAMA
-export const enqueue = addToQueue;
-export const enQueue = addToQueue;
-export const pushToQueue = addToQueue;
-export const addQueue = addToQueue;
-export const addToOfflineQueue = addToQueue;
-export const enqueueTransaction = addToQueue;
-export const enqueueOffline = addToQueue;
-export const dequeue = removeEntry;
-export const deQueue = removeEntry;
-export const removeFromQueue = removeEntry;
-export const deleteFromQueue = removeEntry;
-export const deleteQueueEntry = removeEntry;
-export const removeQueueItem = removeEntry;
-export const popFromQueue = removeEntry;
-export const removeFromQueueById = removeEntry;
-export const deleteQueue = clearQueue;
+// TAMBAHAN EXPORT BIAR BUILD GAK FAIL - KOMPATIBEL SAMA VERSI BARU
+export const addToQueue = enqueue;
+export const enqueueTransaction = enqueue;
+export const enqueueOffline = enqueue;
+export const removeEntry = removeFromQueue;
+export const deleteFromQueue = removeFromQueue;
+export const dequeue = removeFromQueue;
+export const clearQueue = () => save([]);
 export const getOfflineQueue = getQueue;
 export const getAllQueue = getQueue;
+export const OFFLINE_EVENT = QUEUE_EVENT;
+export const SYNC_EVENT = 'qasir:sync';
 
-const offlineQueue = {
-  getQueue, addToQueue, enqueue, dequeue, clearQueue,
-  retryEntry, removeEntry, removeFromQueue, flushQueue,
-  QUEUE_EVENT, QUEUE_EVENTS, OFFLINE_EVENT, SYNC_EVENT
+export default {
+  getQueue,
+  enqueue,
+  addToQueue,
+  removeFromQueue,
+  removeEntry,
+  clearQueue,
+  flushQueue,
+  retryEntry,
+  QUEUE_EVENT
 };
-
-export default offlineQueue;
