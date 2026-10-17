@@ -3,20 +3,24 @@ import { runCheckout } from "@/lib/checkout";
 const KEY = "qasir.offlineQueue.v1";
 export const QUEUE_EVENT = "qasir-queue";
 export const OFFLINE_QUEUE_EVENT = QUEUE_EVENT;
+export const OFFLINE_EVENT = QUEUE_EVENT;
+export const SYNC_EVENT = 'qasir:sync';
 export const QUEUE_EVENTS = { UPDATED: QUEUE_EVENT, ADD: 'add', REMOVE: 'remove', RETRY: 'retry' };
 export const DB_NAME = 'qasir_offline_db';
 export const STORE_NAME = 'offline_queue';
 
-// STORAGE ANTI PUTIH - JANGAN PERNAH HAPUS! - DITAMBAH ANTI FILTER ERROR
+// STORAGE ANTI PUTIH - JANGAN PERNAH HAPUS! - VERSI FIX ANTI e.filter
 const _memory = { queue: [] };
 
 function ensureArray(data) {
   if (!data) return [];
   if (Array.isArray(data)) return data;
   if (typeof data === 'object') {
-    // Kalau object, bungkus jadi array biar .filter gak error!
     if (data.client_ref) return [data];
-    if (Object.keys(data).length > 0) return Object.values(data).filter(v => v && typeof v === 'object');
+    if (Object.keys(data).length > 0) {
+      const vals = Object.values(data);
+      return vals.filter(v => v && typeof v === 'object');
+    }
     return [];
   }
   return [];
@@ -27,13 +31,11 @@ export const getQueue = () => {
     const raw = localStorage.getItem(KEY);
     if (!raw) return _memory.queue || [];
     const parsed = JSON.parse(raw);
-    // FIX UTAMA e.filter ERROR: PASTIKAN SELALU ARRAY!
     const safeArray = ensureArray(parsed);
     _memory.queue = safeArray;
     return safeArray; 
   } catch (e) {
     console.warn("getQueue skip error, pakai memory:", e?.name);
-    // JANGAN HAPUS! PAKAI MEMORY AJA BIAR GAK PUTIH & TRANSAKSI GAK HILANG!
     return ensureArray(_memory.queue);
   }
 };
@@ -55,7 +57,6 @@ export const enqueue = (entry) => {
   try {
     if (!entry || !entry.client_ref) return;
     const current = ensureArray(getQueue());
-    // FIX: pakai ensureArray sebelum filter!
     const filtered = current.filter((e) => e && e.client_ref !== entry.client_ref);
     save([...filtered, { ...entry, status: "pending", error: null }]);
   } catch (e) { console.warn("enqueue skip:", e?.name); }
@@ -114,7 +115,7 @@ export const retryEntry = (ref) => {
   } catch (e) { console.warn("retry skip:", e?.name); }
 };
 
-// TAMBAHAN EXPORT BIAR BUILD GAK FAIL - KOMPATIBEL SAMA VERSI BARU
+// TAMBAHAN EXPORT BIAR BUILD GAK FAIL
 export const addToQueue = enqueue;
 export const enqueueTransaction = enqueue;
 export const enqueueOffline = enqueue;
@@ -124,8 +125,6 @@ export const dequeue = removeFromQueue;
 export const clearQueue = () => save([]);
 export const getOfflineQueue = getQueue;
 export const getAllQueue = getQueue;
-export const OFFLINE_EVENT = QUEUE_EVENT;
-export const SYNC_EVENT = 'qasir:sync';
 
 export default {
   getQueue,
