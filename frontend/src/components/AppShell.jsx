@@ -34,7 +34,6 @@ function StatusBadge({ online, healthy }) {
   } catch { return <span className="text-xs">Online</span>; }
 }
 
-// ANTI PUTIH BOUNDARY KHUSUS UNTUK OUTLET
 function SafeOutlet() {
   try {
     return <Outlet />;
@@ -52,7 +51,7 @@ export default function AppShell() {
   const [thumb, setThumb] = useState({ width: 0, left: 0 });
   const [dragging, setDragging] = useState(false);
 
-  // FIX UTAMA - JANGAN PERNAH BIKIN PUTIH PAS FLUSH QUEUE!
+  // FIX FINAL ANTI PUTIH - JANGAN PERNAH HAPUS DATABASE!
   useEffect(() => {
     let cancelled = false;
     const run = async () => {
@@ -63,14 +62,8 @@ export default function AppShell() {
         if (r?.synced) toast.success(`${r.synced} transaksi offline tersinkron`);
         if (r?.failed) toast.error(`${r.failed} transaksi offline ditolak — cek antrean`);
       } catch (e) {
-        console.warn("flushQueue di AppShell error (diamankan):", e?.name, e?.message);
-        // JANGAN THROW! Kalau NotFoundError, anggap selesai, jangan bikin putih!
-        if (e?.name === "NotFoundError") {
-          try {
-            localStorage.removeItem("qasir.offlineQueue.v1");
-            indexedDB.deleteDatabase("qasir_offline_db");
-          } catch {}
-        }
+        console.warn("flushQueue di AppShell diamankan:", e?.name, e?.message);
+        // ANTI PUTIH: JANGAN HAPUS APAPUN! SKIP AJA!
       }
     };
     run();
