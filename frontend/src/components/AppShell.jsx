@@ -7,7 +7,23 @@ import { useConnection } from "@/hooks/useConnection";
 import { flushQueue } from "@/lib/offlineQueue";
 import { QueueSheet } from "@/components/QueueSheet";
 import { OutletSwitcher } from "@/components/OutletSwitcher";
-
+// AUTO CLEAN CACHE LAMA - ANTI STUCK NON-INCOGNITO
+try {
+  if (typeof window !== 'undefined') {
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then(regs => {
+        regs.forEach(r => r.unregister());
+      });
+    }
+    const ver = localStorage.getItem('qasir.cache.version');
+    if (ver !== 'v3-final') {
+      localStorage.removeItem('qasir.offlineQueue.v1');
+      try { indexedDB.deleteDatabase('qasir_offline_db'); } catch {}
+      localStorage.setItem('qasir.cache.version', 'v3-final');
+      console.log('Cache lama dibersihin otomatis');
+    }
+  }
+} catch {}
 const NAV = [
   { to: "/", label: "Kasir", id: "nav-pos", end: true },
   { to: "/transactions", label: "Transaksi", id: "nav-transactions" },
