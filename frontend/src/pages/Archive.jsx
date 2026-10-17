@@ -19,6 +19,7 @@ function getBimonthly() {
 
 export default function Archive() {
   const [loading,setLoading]=useState(false)
+  const [errorMsg,setErrorMsg]=useState("")
   const [p]=useState(getBimonthly())
 
   const getToken = async () => {
@@ -29,18 +30,47 @@ export default function Archive() {
   const doArchive = async () => {
     if(!confirm(`Arsipkan periode ${p.label}?`)) return
     setLoading(true)
+    setErrorMsg("")
     try{
       const token = await getToken()
-      const res = await fetch(`${API_URL}/api/archives/run`,{
+      if(!token) throw new Error("Sesi login habis, silakan logout & login lagi")
+
+      // FIX: Kalau API_URL kosong, coba pakai relative /api
+      const baseUrl = API_URL ? API_URL.replace(/\/$/, "") : ""
+      const endpoint = `${baseUrl}/api/archives/run`
+      
+      console.log("Arsip fetch ke:", endpoint)
+      
+      const res = await fetch(endpoint,{
         method:"POST",
         headers:{Authorization:`Bearer ${token}`,"Content-Type":"application/json"},
         body:JSON.stringify({start:p.start,end:p.end,label:p.label})
       })
+
+      // Jika response bukan OK, baca error detailnya
       if(!res.ok){
-        const j=await res.json().catch(()=>({error:"Gagal"}))
-        throw new Error(j.detail || j.error)
+        const text = await res.text()
+        let detail = text
+        try { 
+          const j = JSON.parse(text)
+          detail = j.detail || j.error || j.message || text
+        } catch {}
+        throw new Error(`Server ${res.status}: ${detail}`)
       }
+
+      // Cek apakah response adalah JSON error yang terbungkus blob
+      const contentType = res.headers.get("content-type") || ""
+      if(contentType.includes("application/json")){
+        const j = await res.json()
+        if(j.error || j.detail) throw new Error(j.detail || j.error)
+      }
+
       const blob = await res.blob()
+      if(blob.size < 100) {
+        const txt = await blob.text()
+        throw new Error(`File terlalu kecil / error: ${txt}`)
+      }
+
       const url = window.URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href=url
@@ -48,8 +78,13 @@ export default function Archive() {
       document.body.appendChild(a)
       a.click()
       a.remove()
+      window.URL.revokeObjectURL(url)
       alert(`Berhasil arsip ${p.label}`)
-    }catch(e){ alert(e.message) }
+    }catch(e){ 
+      console.error("Arsip error:", e)
+      setErrorMsg(e.message)
+      alert(`Gagal arsip: ${e.message}\n\nCek Console F12 untuk detail`)
+    }
     setLoading(false)
   }
 
@@ -57,10 +92,28 @@ export default function Archive() {
     <div className="p-6 max-w-3xl mx-auto">
       <h1 className="text-2xl font-bold">📦 Arsip 2 Bulanan</h1>
       <p className="text-slate-500 my-2">Periode: <b className="text-slate-900">{p.label}</b> ({p.start} s/d {p.end})</p>
-      <p className="text-xs text-slate-400 mb-6">Otomatis arsip tiap akhir Feb, Apr, Jun, Agu, Okt, Des</p>
-      <button onClick={doArchive} disabled={loading} className="bg-slate-900 text-white px-6 py-3 rounded-md font-semibold">
+      <p className="text-xs text-slate-400 mb-4">Otomatis arsip tiap akhir Feb, Apr, Jun, Agu, Okt, Des</p>
+      
+      {!API_URL && (
+        <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded text-sm text-amber-800">
+          ⚠️ VITE_API_URL belum di-set di Vercel! Saat ini pakai relative URL. Pastikan backend ada di /api
+        </div>
+      )}
+
+      {errorMsg && (
+        <div className="mb-4 p-3 bg-rose-50 border border-rose-200 rounded text-sm text-rose-700 font-mono whitespace-pre-wrap">
+          Error: {errorMsg}
+        </div>
+      )}
+
+      <button onClick={doArchive} disabled={loading} className="bg-slate-900 text-white px-6 py-3 rounded-md font-semibold disabled:opacity-50">
         {loading?"Memproses...":`Arsipkan & Download Excel ${p.label}`}
       </button>
+
+      <div className="mt-6 text-xs text-slate-400">
+        <p>API: {API_URL ? `${API_URL}/api/archives/run` : "/api/archives/run (relative)"}</p>
+        <p>Buka F12 - Console untuk lihat detail fetch</p>
+      </div>
     </div>
   )
 }
