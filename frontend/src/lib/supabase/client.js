@@ -3,26 +3,23 @@ import { createClient } from "@supabase/supabase-js";
 const url = process.env.REACT_APP_SUPABASE_URL;
 const anonKey = process.env.REACT_APP_SUPABASE_ANON_KEY;
 
-if (!url ||!anonKey) {
+if (!url || !anonKey) {
   console.error("FATAL: Supabase env missing!", {
-    hasUrl:!!url,
-    hasKey:!!anonKey,
+    hasUrl: !!url,
+    hasKey: !!anonKey,
     allEnv: Object.keys(process.env).filter(k => k.includes("SUPABASE"))
   });
 }
 
-// STORAGE ANTI PUTIH - kalau localStorage error, jangan crash, pakai memory aja
+// STORAGE ANTI PUTIH V2 - TIDAK PERNAH HAPUS DATA!
 const safeStorage = {
   _memory: {},
   getItem(key) {
     try {
       return localStorage.getItem(key);
     } catch (e) {
-      console.warn("safeStorage getItem error:", e?.name, key);
-      if (e?.name === "NotFoundError") {
-        try { localStorage.clear(); } catch {}
-        try { indexedDB.deleteDatabase("qasir_offline_db"); } catch {}
-      }
+      console.warn("safeStorage getItem skip:", e?.name, key);
+      // JANGAN HAPUS APA PUN! PAKAI MEMORY AJA BIAR GAK PUTIH!
       return this._memory[key] || null;
     }
   },
@@ -31,12 +28,9 @@ const safeStorage = {
       localStorage.setItem(key, value);
       this._memory[key] = value;
     } catch (e) {
-      console.warn("safeStorage setItem error:", e?.name, key);
-      // jangan crash, simpen di memory aja
+      console.warn("safeStorage setItem skip:", e?.name, key);
+      // JANGAN CRASH, SIMPEN DI MEMORY AJA!
       this._memory[key] = value;
-      if (e?.name === "NotFoundError") {
-        try { localStorage.clear(); } catch {}
-      }
     }
   },
   removeItem(key) {
@@ -44,22 +38,14 @@ const safeStorage = {
       localStorage.removeItem(key);
       delete this._memory[key];
     } catch (e) {
-      console.warn("safeStorage removeItem error:", e?.name);
+      console.warn("safeStorage removeItem skip:", e?.name);
       delete this._memory[key];
     }
   }
 };
 
-// Hapus DB rusak saat load pertama kali (biar HP lain auto sembuh)
-try {
-  // ini yang bikin putih di HP lain owy
-  if (typeof indexedDB!== "undefined") {
-    const badDbs = ["qasir_offline_db", "keyval-store", "localforage"];
-    badDbs.forEach(dbName => {
-      try { indexedDB.deleteDatabase(dbName); } catch {}
-    });
-  }
-} catch {}
+// JANGAN HAPUS DATABASE OTOMATIS! ITU BIKIN PUTIH & HILANG TRANSAKSI!
+// Biarkan saja, yang error kita skip aja
 
 export const supabase = createClient(
   url || "https://placeholder.supabase.co",
@@ -69,14 +55,14 @@ export const supabase = createClient(
       persistSession: true,
       autoRefreshToken: true,
       detectSessionInUrl: true,
-      storage: safeStorage, // PAKAI STORAGE ANTI PUTIH!
+      storage: safeStorage,
       flowType: 'pkce'
     },
   },
 );
 
 export async function healthCheck() {
-  if (!url ||!anonKey) return false;
+  if (!url || !anonKey) return false;
   try {
     const { error } = await supabase.from("outlets").select("id", { head: true, count: "exact" });
     if (error) {
@@ -86,8 +72,7 @@ export async function healthCheck() {
     console.info("[supabase] health check OK");
     return true;
   } catch (e) {
-    console.warn("[supabase] health check error (anggap offline):", e?.name, e?.message);
-    // JANGAN PERNAH THROW NotFoundError! ANGGAP OFFLINE AJA BIAR GAK PUTIH!
+    console.warn("[supabase] health check offline:", e?.name);
     return false;
   }
 }
