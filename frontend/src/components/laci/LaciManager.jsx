@@ -127,7 +127,7 @@ export default function LaciManager({ outletId }) {
   // === FIX AKUMULASI OTOMATIS LACI 5 ===
   const totalLaci5 = anakLaci5.reduce((sum, anak) => sum + Number(anak.saldo || 0), 0)
 
-  const displayList = laciInduk.length > 0? laciInduk : laci.filter(l => ['LACI_1', 'LACI_2', 'LACI_5'].includes(l.kode))
+  const displayList = laci.filter(l => !l.parent_id)
   const currentShift = getCurrentShift()
   const businessDate = getBusinessDate()
 
