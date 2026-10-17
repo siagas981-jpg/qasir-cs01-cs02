@@ -8,7 +8,6 @@ export default function SaldoShiftCard() {
   useEffect(() => {
     const fetchSaldo = async () => {
       setLoading(true)
-      // ambil outlet aktif dari user yang login
       const { data: { user } } = await supabase.auth.getUser()
       let outletId = null
       if (user) {
@@ -16,11 +15,18 @@ export default function SaldoShiftCard() {
         outletId = profile?.outlet_id
       }
 
-      let q = supabase.from("saldo_saat_ini").select("jumlah, shift").order("created_at", { ascending: false }).limit(1)
-      if (outletId) q = q.eq("outlet_id", outletId)
+      if (!outletId) { setLoading(false); return }
 
-      const { data } = await q.maybeSingle()
-      setSaldo(data || { jumlah: 0, shift: "Malam" })
+      // FIX: Ambil langsung dari Laci 1, bukan dari view saldo_saat_ini yang masih 0
+      const { data: laci1 } = await supabase.from("laci").select("saldo, nama").eq("outlet_id", outletId).eq("kode", "LACI_1").maybeSingle()
+      
+      // Kalau mau shift nya dinamis, ambil dari shifts aktif
+      const { data: shiftAktif } = await supabase.from("shifts").select("shift").eq("outlet_id", outletId).eq("status", "aktif").order("created_at", {ascending: false}).limit(1).maybeSingle()
+
+      setSaldo({ 
+        jumlah: laci1?.saldo || 0, 
+        shift: shiftAktif?.shift || "Malam" 
+      })
       setLoading(false)
     }
     fetchSaldo()
