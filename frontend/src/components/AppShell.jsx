@@ -7,23 +7,7 @@ import { useConnection } from "@/hooks/useConnection";
 import { flushQueue } from "@/lib/offlineQueue";
 import { QueueSheet } from "@/components/QueueSheet";
 import { OutletSwitcher } from "@/components/OutletSwitcher";
-// AUTO CLEAN CACHE LAMA - ANTI STUCK NON-INCOGNITO
-try {
-  if (typeof window !== 'undefined') {
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.getRegistrations().then(regs => {
-        regs.forEach(r => r.unregister());
-      });
-    }
-    const ver = localStorage.getItem('qasir.cache.version');
-    if (ver !== 'v3-final') {
-      localStorage.removeItem('qasir.offlineQueue.v1');
-      try { indexedDB.deleteDatabase('qasir_offline_db'); } catch {}
-      localStorage.setItem('qasir.cache.version', 'v3-final');
-      console.log('Cache lama dibersihin otomatis');
-    }
-  }
-} catch {}
+
 const NAV = [
   { to: "/", label: "Kasir", id: "nav-pos", end: true },
   { to: "/transactions", label: "Transaksi", id: "nav-transactions" },
@@ -40,11 +24,11 @@ const NAV = [
 
 function StatusBadge({ online, healthy }) {
   try {
-    const ok = online && healthy!== false;
+    const ok = online && healthy !== false;
     return (
       <span data-testid="supabase-sync-status-badge" className="inline-flex items-center gap-1.5 text-xs font-medium">
-        <span className={`h-2 w-2 rounded-full ${ok? "bg-emerald-500" : "bg-rose-500"} ${ok? "" : "animate-pulse"}`} />
-        <span className="hidden sm:inline">{!online? "Offline" : healthy === false? "Supabase error" : "Online"}</span>
+        <span className={`h-2 w-2 rounded-full ${ok ? "bg-emerald-500" : "bg-rose-500"} ${ok ? "" : "animate-pulse"}`} />
+        <span className="hidden sm:inline">{!online ? "Offline" : healthy === false ? "Supabase error" : "Online"}</span>
       </span>
     );
   } catch { return <span className="text-xs">Online</span>; }
@@ -54,32 +38,48 @@ function SafeOutlet() {
   try {
     return <Outlet />;
   } catch (e) {
-    console.warn("Outlet error:", e);
     return <div className="p-10 text-center">Gagal load halaman, coba refresh.<br/><button onClick={()=>window.location.reload()} className="mt-4 px-4 py-2 bg-black text-white rounded">Refresh</button></div>;
   }
 }
 
 export default function AppShell() {
-  const { user, profile, isOwner, signOut } = useAuth();
+  const { user, profile, isOwner } = useAuth();
   const { online, healthy, queue } = useConnection();
   const scrollRef = useRef(null);
   const [showTrack, setShowTrack] = useState(false);
   const [thumb, setThumb] = useState({ width: 0, left: 0 });
   const [dragging, setDragging] = useState(false);
 
-  // FIX FINAL ANTI PUTIH - JANGAN PERNAH HAPUS DATABASE!
+  // FIX ANTI-CACHE PUTIH MODE BIASA = MODE SAMARAN
+  useEffect(() => {
+    try {
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistrations().then(regs => regs.forEach(r => r.unregister()));
+      }
+      const ver = localStorage.getItem('qasir.cache.version');
+      if (ver !== 'v3-final') {
+        localStorage.removeItem('qasir.offlineQueue.v1');
+        try { indexedDB.deleteDatabase('qasir_offline_db'); } catch {}
+        localStorage.setItem('qasir.cache.version', 'v3-final');
+      }
+      const appVer = localStorage.getItem('app_version');
+      if (appVer !== 'v2-fix-filter') {
+        localStorage.setItem('app_version', 'v2-fix-filter');
+      }
+    } catch {}
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
     const run = async () => {
       try {
-        if (!online ||!user?.id) return;
+        if (!online || !user?.id) return;
         const r = await flushQueue(user.id);
         if (cancelled) return;
         if (r?.synced) toast.success(`${r.synced} transaksi offline tersinkron`);
-        if (r?.failed) toast.error(`${r.failed} transaksi offline ditolak — cek antrean`);
+        if (r?.failed) toast.error(`${r.failed} transaksi offline ditolak`);
       } catch (e) {
-        console.warn("flushQueue di AppShell diamankan:", e?.name, e?.message);
-        // ANTI PUTIH: JANGAN HAPUS APAPUN! SKIP AJA!
+        console.warn("flushQueue diamankan:", e?.message);
       }
     };
     run();
@@ -97,7 +97,7 @@ export default function AppShell() {
       const thumbWidth = Math.max((clientWidth / scrollWidth) * trackWidth, 40);
       const maxScroll = scrollWidth - clientWidth;
       const maxThumb = trackWidth - thumbWidth;
-      const thumbLeft = maxScroll > 0? (scrollLeft / maxScroll) * maxThumb : 0;
+      const thumbLeft = maxScroll > 0 ? (scrollLeft / maxScroll) * maxThumb : 0;
       setThumb({ width: thumbWidth, left: thumbLeft });
     } catch {}
   };
@@ -144,7 +144,7 @@ export default function AppShell() {
         const dx = ev.clientX - startX;
         const newLeft = Math.min(Math.max(startLeft + dx, 0), trackWidth - thumb.width);
         const maxThumb = trackWidth - thumb.width;
-        const ratio = maxThumb > 0? newLeft / maxThumb : 0;
+        const ratio = maxThumb > 0 ? newLeft / maxThumb : 0;
         el.scrollLeft = ratio * (scrollWidth - clientWidth);
       } catch {}
     };
@@ -160,6 +160,7 @@ export default function AppShell() {
   const isDownRef = useRef(false);
   const startXRef = useRef(0);
   const scrollLeftRef = useRef(0);
+  const { signOut } = useAuth();
 
   if (!user) {
     return <div className="min-h-screen grid place-items-center p-10">Loading akun...</div>;
@@ -200,17 +201,18 @@ export default function AppShell() {
                   cur.scrollLeft = scrollLeftRef.current - walk;
                 } catch {}
               }}
-                  >
-        {(Array.isArray(NAV) ? NAV : []).filter((n)=> n && (n.owner || !isOwner)).map((n) => (
-          <NavLink key={n.to} to={n.to} end={n.end} data-testid={n.id}
-            className={({ isActive }) => `whitespace-nowrap rounded-md px-3 py-2 text-sm font-semibold transition-colors inline-flex items-center gap-1.5 shrink-0 ${isActive? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"}`}>
-            {n.icon && <n.icon className="h-4 w-4" />}{n.label}
-          </NavLink>
-        ))}
-      </nav>
-      {showTrack && (
+            >
+              {/* FIX UTAMA ANTI PUTIH - LOGIKA DIBALIK! */}
+              {(Array.isArray(NAV) ? NAV : []).filter((n) => n && (!n.owner || isOwner)).map((n) => (
+                <NavLink key={n.to} to={n.to} end={n.end} data-testid={n.id}
+                  className={({ isActive }) => `whitespace-nowrap rounded-md px-3 py-2 text-sm font-semibold transition-colors inline-flex items-center gap-1.5 shrink-0 ${isActive ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"}`}>
+                  {n.icon && <n.icon className="h-4 w-4" />}{n.label}
+                </NavLink>
+              ))}
+            </nav>
+            {showTrack && (
               <div onMouseDown={onTrackMouseDown} className="relative mt-1 h-2 w-full bg-slate-200 rounded-full cursor-pointer group">
-                <div onMouseDown={onThumbMouseDown} className={`absolute top-0 h-full bg-slate-900 rounded-full hover:bg-black transition-colors ${dragging? "bg-black h-[8px] -top-[1px]" : ""}`} style={{ width: `${thumb.width}px`, left: `${thumb.left}px` }} />
+                <div onMouseDown={onThumbMouseDown} className={`absolute top-0 h-full bg-slate-900 rounded-full hover:bg-black transition-colors ${dragging ? "bg-black h-[8px] -top-[1px]" : ""}`} style={{ width: `${thumb.width}px`, left: `${thumb.left}px` }} />
               </div>
             )}
           </div>
