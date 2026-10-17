@@ -7,20 +7,31 @@ import { useConnection } from "@/hooks/useConnection";
 import { flushQueue } from "@/lib/offlineQueue";
 import { QueueSheet } from "@/components/QueueSheet";
 import { OutletSwitcher } from "@/components/OutletSwitcher";
-// AUTO CLEAN CACHE LAMA - ANTI STUCK NON-INCOGNITO
+// AUTO CLEAN + PAKSA TAMPIL ERROR DI HP LAIN
 try {
   if (typeof window !== 'undefined') {
+    // ini bikin HP teriak kalo error, bukan putih doang
+    window.onerror = function(msg, url, line) {
+      const div = document.createElement('div');
+      div.style = 'position:fixed;top:0;left:0;z-index:99999;background:red;color:white;padding:10px;font-size:12px;width:100%;word-break:break-all';
+      div.innerHTML = 'ERROR: ' + msg + '<br>File:' + url + ':' + line;
+      document.body.prepend(div);
+      alert('ERROR TERDETEKSI: ' + msg);
+    };
+    window.onunhandledrejection = function(e) {
+      alert('PROMISE ERROR: ' + (e.reason?.message || e.reason));
+    };
+
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.getRegistrations().then(regs => {
         regs.forEach(r => r.unregister());
       });
     }
     const ver = localStorage.getItem('qasir.cache.version');
-    if (ver !== 'v3-final') {
+    if (ver !== 'v3-debug') {
       localStorage.removeItem('qasir.offlineQueue.v1');
       try { indexedDB.deleteDatabase('qasir_offline_db'); } catch {}
-      localStorage.setItem('qasir.cache.version', 'v3-final');
-      console.log('Cache lama dibersihin otomatis');
+      localStorage.setItem('qasir.cache.version', 'v3-debug');
     }
   }
 } catch {}
