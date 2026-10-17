@@ -11,12 +11,18 @@ export default function Laci5InfoKasir() {
     if (!user) return
     const { data: profile } = await supabase.from("profiles").select("outlet_id").eq("id", user.id).single()
     const outletId = profile?.outlet_id
-    if (!outletId) return
+    if (!outletId) { setLoading(false); return }
 
-    const { data: laci } = await supabase.from("laci").select("*").eq("outlet_id", outletId)
-    const laci5 = laci?.find(l => l.kode === 'LACI_5')
+    const { data: laci } = await supabase.from("laci").select("*").eq("outlet_id", outletId).order("kode", {ascending: true})
+    if (!laci) { setLoading(false); return }
+    
+    const laci5 = laci.find(l => l.kode === 'LACI_5')
     if (!laci5) { setLoading(false); return }
+
+    // FIX: Ambil semua anak Laci 5, termasuk yang saldo 0 (DANA)
+    // Jangan filter >0, biar DANA Rp 0 tetap muncul!
     const anak = laci.filter(l => l.parent_id === laci5.id)
+    
     const sum = anak.reduce((s, a) => s + Number(a.saldo || 0), 0)
     setTotal(sum)
     setRincian(anak)
@@ -25,7 +31,7 @@ export default function Laci5InfoKasir() {
 
   useEffect(() => {
     fetchLaci5()
-    const interval = setInterval(fetchLaci5, 30000)
+    const interval = setInterval(fetchLaci5, 10000) // 10 detik auto update
     return () => clearInterval(interval)
   }, [fetchLaci5])
 
@@ -47,7 +53,7 @@ export default function Laci5InfoKasir() {
           </div>
         ))}
       </div>
-      <div className="text-[9px] text-blue-400 mt-2 text-center">🔒 Tidak bisa edit. Auto update.</div>
+      <div className="text-[9px] text-blue-400 mt-2 text-center">🔒 Tidak bisa edit. Auto update. (Termasuk saldo 0)</div>
     </div>
   )
 }
