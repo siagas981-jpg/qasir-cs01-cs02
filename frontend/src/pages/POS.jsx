@@ -13,6 +13,7 @@ import { ReceiptDialog } from "@/components/pos/ReceiptDialog";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { useShift } from "@/hooks/useShift";
 import ShiftStartModal from "@/components/ShiftStartModal";
+import Laci5InfoKasir from "@/components/laci/Laci5InfoKasir"; // <-- TAMBAHAN OPSI 1
 
 export const fetchProducts = async (outletId) => {
   const { data, error } = await supabase.from("products").select("*").eq("outlet_id", outletId).order("name");
@@ -36,7 +37,6 @@ function useMasters() {
   return { categories, brands, collections };
 }
 
-// --- TAMBAHAN BARU: HOOK BUAT AMBIL LACI BANK (BRI/BNI/MANDIRI/DANA) ---
 function useLaciBank(outletId) {
   return useQuery({
     queryKey: ["laci-bank", outletId],
@@ -87,9 +87,8 @@ const unformatRupiah = (formatted) => {
   return Number(String(formatted).replace(/\./g, "").replace(/[^0-9]/g, "")) || 0;
 };
 
-// --- STATE BARU UNTUK TRANSAKSI BANK ---
   const [bankLaciId, setBankLaciId] = useState("");
-  const [bankTipe, setBankTipe] = useState("masuk"); // masuk = ada transfer masuk, keluar = tarik tunai
+  const [bankTipe, setBankTipe] = useState("masuk");
   const [bankJumlah, setBankJumlah] = useState("");
   const [bankKet, setBankKet] = useState("");
   const [bankLoading, setBankLoading] = useState(false);
@@ -121,12 +120,10 @@ const unformatRupiah = (formatted) => {
     qc.invalidateQueries({ queryKey: ["products", activeOutletId] });
   };
 
-  // --- FUNGSI BARU: AUTO MUTASI SALDO BANK ---
   const handleBankTx = async () => {
     if (!bankLaciId ||!bankJumlah) { toast.error("Pilih bank & isi jumlah"); return; }
     setBankLoading(true);
     try {
-      // Ambil business date & shift dari hook shift kamu
       const nowShift = shift?.currentShift || shift?.shiftName || "MALAM";
       const { error } = await supabase.from("bank_transactions").insert({
         outlet_id: activeOutletId,
@@ -138,10 +135,10 @@ const unformatRupiah = (formatted) => {
         keterangan: bankKet || `${bankTipe} ${laciBank.find(b=>b.id===bankLaciId)?.nama}`,
       });
       if (error) throw error;
-      toast.success(`Transaksi ${bankTipe} ${laciBank.find(b=>b.id===bankLaciId)?.nama} Rp ${bankJumlah} berhasil! Saldo auto update.`);
+      toast.success(`Transaksi ${bankTipe} ${laciBank.find(b=>b.id===bankLaciId)?.nama} Rp ${bankJumlah} berhasil!`);
       setBankJumlah(""); setBankKet(""); setBankLaciId("");
       qc.invalidateQueries({ queryKey: ["laci-bank"] });
-      qc.invalidateQueries({ queryKey: ["laci"] }); // biar LaciManager langsung update
+      qc.invalidateQueries({ queryKey: ["laci"] });
       qc.invalidateQueries({ queryKey: ["laci-mutasi"] });
     } catch (e) {
       toast.error("Gagal: " + e.message);
@@ -169,7 +166,6 @@ const unformatRupiah = (formatted) => {
         <ProductGrid products={filteredProducts} loading={isLoading} inCart={inCart} onAdd={cart.add} search={search} setSearch={setSearch} />
       </section>
       <aside className="lg:col-span-5 xl:col-span-4 bg-white border-t lg:border-t-0 lg:border-l p-4 md:p-6 lg:h-full lg:overflow-y-auto space-y-6">
-        {/* --- PANEL BARU: TRANSAKSI BANK OTOMATIS --- */}
         <div className="rounded-xl border-2 border-emerald-200 bg-emerald-50/50 p-4 space-y-3">
           <h3 className="font-bold text-sm text-emerald-900">🏦 Transaksi Bank (Auto Saldo Laci 5)</h3>
           <div className="grid grid-cols-2 gap-2">
@@ -191,6 +187,10 @@ const unformatRupiah = (formatted) => {
         </div>
 
         <CartPanel cart={cart} stockOf={stockOf} onCheckout={() => { setPayError(""); setPayOpen(true); }} />
+
+        {/* INI YANG BIKIN JADI 0 SAAT PILIH QASIR 02 - OPSI 1 */}
+        <Laci5InfoKasir outletId={activeOutletId} />
+
       </aside>
       <PayDialog open={payOpen} onOpenChange={setPayOpen} total={cart.total} onSubmit={submit} error={payError} />
       <ReceiptDialog receipt={receipt} onClose={() => setReceipt(null)} />
