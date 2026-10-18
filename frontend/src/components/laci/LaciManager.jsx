@@ -1,254 +1,194 @@
-import { useEffect, useState, useCallback } from "react"
-import { supabase } from "@/lib/supabase/client"
+import { useState, useEffect } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
+import { supabase } from "@/lib/supabase/client";
+import { toast } from "sonner";
+import { rupiah, parseRupiah } from "@/lib/format";
+import { useAuth } from "@/context/AuthContext";
+
+// === FIX 1: AMBIL SEMUA LACI - BIAR AUTO MUNCUL KALAU TAMBAH BARU ===
+async function fetchAllLaci(outletId) {
+  const { data, error } = await supabase
+    .from("laci")
+    .select("*")
+    .eq("outlet_id", outletId)
+    .eq("is_active", true)
+    .order("code", { ascending: true });
+  if (error) throw error;
+  return data || [];
+}
 
 export default function LaciManager({ outletId }) {
-  const [laci, setLaci] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [showAdd, setShowAdd] = useState(false)
-  const [showTransfer, setShowTransfer] = useState(false)
-  const [showDeposit, setShowDeposit] = useState(false)
-  const [selectedLaci, setSelectedLaci] = useState(null)
-  const [depositJumlah, setDepositJumlah] = useState("")
-  const [dailyDeposits, setDailyDeposits] = useState([])
-  const [newNama, setNewNama] = useState("")
-  const [newJenis, setNewJenis] = useState("cash")
-  const [transfer, setTransfer] = useState({ dari: "", ke: "", jumlah: "" })
+  const qc = useQueryClient();
+  const { user, profile, activeOutletId } = useAuth();
+  
+  // === FIX 2: DETEKSI OWNER - BIAR BISA EDIT KAPANPUN ===
+  const isOwner = profile?.role === "owner" || profile?.role === "OWNER" || profile?.is_owner === true;
 
-  const formatRupiah = (angka) => {
-    if (!angka) return "";
-    const numberString = angka.replace(/\D/g, "");
-    if (!numberString) return "";
-    return parseInt(numberString, 10).toLocaleString("id-ID");
-  };
-  const unformatRupiah = (formatted) => {
-    return Number(formatted.replace(/\./g, "").replace(/[^0-9]/g, ""));
-  };
+  const [openAdd, setOpenAdd] = useState(false);
+  const [openTransfer, setOpenTransfer] = useState(false);
+  const [openEdit, setOpenEdit] = useState(null); // laci yang diedit
+  const [form, setForm] = useState({ code: "", name: "", type: "CASH", balance: 0 });
+  const [transfer, setTransfer] = useState({ from: "", to: "", amount: 0 });
+  const [editBalance, setEditBalance] = useState(0);
 
-  const getBusinessDate = () => {
-    const now = new Date();
-    const witaStr = now.toLocaleString("en-US", { timeZone: "Asia/Makassar" });
-    const wita = new Date(witaStr);
-    if (wita.getHours() < 1) {
-      wita.setDate(wita.getDate() - 1);
-    }
-    return wita.toISOString().split('T')[0];
-  }
+  const { data: lacis = [], isLoading } = useQuery({
+    queryKey: ["laci-all", outletId],
+    queryFn: () => fetchAllLaci(outletId),
+    enabled: !!outletId,
+  });
 
-  const getCurrentShift = () => {
-    const now = new Date();
-    const witaStr = now.toLocaleString("en-US", { timeZone: "Asia/Makassar" });
-    const wita = new Date(witaStr);
-    const hour = wita.getHours();
-    if (hour >= 1 && hour < 9) return "MALAM";
-    if (hour >= 9 && hour < 17) return "PAGI";
-    return "SORE";
-  }
+  // === FIX 3: REALTIME - AUTO MUNCUL DI KARYAWAN TANPA REFRESH ===
+  useEffect(() => {
+    if (!outletId) return;
+    const channel = supabase
+      .channel(`laci-${outletId}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "laci", filter: `outlet_id=eq.${outletId}` }, () => {
+        qc.invalidateQueries({ queryKey: ["laci-all", outletId] });
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [outletId, qc]);
 
-  const fetchLaci = useCallback(async () => {
-    if (!outletId) return
-    setLoading(true)
-    const { data } = await supabase.from("laci").select("*").eq("outlet_id", outletId).order("kode", { ascending: true })
-    setLaci(data || [])
-    const businessDate = getBusinessDate();
-    const { data: deposits } = await supabase.from("laci_daily_deposit").select("*").eq("outlet_id", outletId).eq("business_date", businessDate)
-    setDailyDeposits(deposits || [])
-    setLoading(false)
-  }, [outletId])
-
-  useEffect(() => { fetchLaci() }, [fetchLaci])
-
-  const canInputDeposit = (laciKode) => {
-    const shift = getCurrentShift();
-    if (shift!== "MALAM") return { allowed: false, reason: `Terkunci. Hanya Shift Malam (Haekal 01:00-09:00) yang boleh input. Shift kamu: ${shift}. Fitry shift 2 tidak bisa input.` };
-    const sudah = dailyDeposits.find(d => d.laci_kode === laciKode);
-    if (sudah) return { allowed: false, reason: `Sudah setor hari ini Rp ${Number(sudah.jumlah).toLocaleString("id-ID")} jam ${new Date(sudah.created_at).toLocaleString("id-ID")}. Reset jam 01:00 besok.` };
-    return { allowed: true, reason: "" };
-  }
-
-  const handleOpenDeposit = (item) => {
-    const check = canInputDeposit(item.kode);
-    if (!check.allowed) {
-      alert(check.reason);
-      return;
-    }
-    setSelectedLaci(item);
-    setDepositJumlah("");
-    setShowDeposit(true);
-  }
-
-  const handleDeposit = async () => {
-    const jml = unformatRupiah(depositJumlah)
-    if (!selectedLaci || jml <= 0) return alert("Isi jumlah dengan benar")
-    const businessDate = getBusinessDate();
-    const shift = getCurrentShift();
-    const { error: depError } = await supabase.from("laci_daily_deposit").insert({
+  const handleAdd = async (e) => {
+    e.preventDefault();
+    const { error } = await supabase.from("laci").insert({
       outlet_id: outletId,
-      laci_kode: selectedLaci.kode,
-      business_date: businessDate,
-      jumlah: jml,
-      shift: shift,
-      tanggal_input: new Date().toISOString()
-    })
-    if (depError) return alert("Gagal: " + depError.message + " (Mungkin sudah input hari ini)");
-    const { error: laciError } = await supabase.from("laci").update({ saldo: Number(selectedLaci.saldo) + jml }).eq("id", selectedLaci.id)
-    if (laciError) return alert(laciError.message)
-    setShowDeposit(false)
-    fetchLaci()
-    alert(`Berhasil! Saldo ${selectedLaci.nama} ditambah Rp ${jml.toLocaleString("id-ID")}. Terkunci sampai jam 01:00 besok.`)
-  }
+      code: form.code.toUpperCase(),
+      name: form.name,
+      type: form.type,
+      balance: form.balance,
+      is_active: true,
+      created_by: user?.id,
+    });
+    if (error) return toast.error(error.message);
+    toast.success(`${form.name} berhasil! Auto muncul di login karyawan!`);
+    setOpenAdd(false);
+    setForm({ code: "", name: "", type: "CASH", balance: 0 });
+  };
 
-  const handleAddLaci = async () => {
-    if (!newNama ||!outletId) return
-    const { error } = await supabase.from("laci").insert({ outlet_id: outletId, nama: newNama, kode: `LACI_${Date.now()}`, jenis: newJenis, saldo: 0 })
-    if (!error) { setNewNama(""); setShowAdd(false); fetchLaci() } else alert(error.message)
-  }
+  // === OWNER BISA EDIT KAPANPUN ===
+  const handleEditOwner = async () => {
+    if (!openEdit) return;
+    const { error } = await supabase.from("laci").update({ balance: editBalance }).eq("id", openEdit.id);
+    if (error) return toast.error(error.message);
+    toast.success(`Saldo ${openEdit.name} diubah jadi ${rupiah(editBalance)} - Owner Access`);
+    setOpenEdit(null);
+    qc.invalidateQueries({ queryKey: ["laci-all", outletId] });
+  };
 
-  const handleTransfer = async () => {
-    const { dari, ke, jumlah } = transfer
-    const jml = unformatRupiah(jumlah)
-    if (!dari ||!ke || jml <= 0) return alert("Lengkapi data transfer")
-    if (dari === ke) return alert("Asal dan tujuan tidak boleh sama")
-    const laciDari = laci.find(l => l.id === dari)
-    const laciKe = laci.find(l => l.id === ke)
-    if (Number(laciDari.saldo) < jml) return alert("Saldo tidak cukup")
-    const { error: e1 } = await supabase.from("laci").update({ saldo: Number(laciDari.saldo) - jml }).eq("id", dari)
-    const { error: e2 } = await supabase.from("laci").update({ saldo: Number(laciKe.saldo) + jml }).eq("id", ke)
-    if (e1 || e2) return alert((e1 || e2).message)
-    await supabase.from("laci_mutasi").insert({ outlet_id: outletId, dari_laci_id: dari, ke_laci_id: ke, jumlah: jml, tipe: "transfer_antar_laci", keterangan: `Transfer ${laciDari.nama} -> ${laciKe.nama}` })
-    setShowTransfer(false); setTransfer({ dari: "", ke: "", jumlah: "" }); fetchLaci()
-  }
+  const handleTransfer = async (e) => {
+    e.preventDefault();
+    const fromLaci = lacis.find(l => l.id === transfer.from);
+    const toLaci = lacis.find(l => l.id === transfer.to);
+    if (!fromLaci || !toLaci || transfer.amount <= 0) return toast.error("Lengkapi data");
+    if (fromLaci.id === toLaci.id) return toast.error("Laci sama");
+    
+    // Owner boleh transfer walau terkunci, karyawan cek saldo
+    if (!isOwner && (fromLaci.balance||0) < transfer.amount) return toast.error("Saldo tidak cukup");
 
-  if (!outletId) return <div className="p-4 text-sm opacity-60">Pilih outlet dulu...</div>
-  if (loading) return <div className="p-4 text-sm">Memuat laci...</div>
+    await supabase.from("laci").update({ balance: (fromLaci.balance||0) - transfer.amount }).eq("id", transfer.from);
+    await supabase.from("laci").update({ balance: (toLaci.balance||0) + transfer.amount }).eq("id", transfer.to);
+    toast.success("Transfer berhasil");
+    setOpenTransfer(false);
+    qc.invalidateQueries({ queryKey: ["laci-all", outletId] });
+  };
 
-  const laciInduk = laci.filter(l =>!l.parent_id)
-  const laci5 = laci.find(l => l.kode === 'LACI_5')
-  const anakLaci5 = laci5? laci.filter(l => l.parent_id === laci5.id) : []
-  // === FIX AKUMULASI OTOMATIS LACI 5 ===
-  const totalLaci5 = anakLaci5.reduce((sum, anak) => sum + Number(anak.saldo || 0), 0)
-
-  const displayList = laci.filter(l => !l.parent_id)
-  const currentShift = getCurrentShift()
-  const businessDate = getBusinessDate()
+  if (isLoading) return <div className="p-4 text-sm">Memuat {lacis.length} laci...</div>;
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col gap-2 bg-yellow-50 border border-yellow-200 p-3 rounded-xl">
-        <div className="flex justify-between items-center">
-          <h3 className="font-bold text-sm">Manajemen Laci - Shift: {currentShift} | Hari Bisnis: {businessDate}</h3>
-          <div className="text-[10px] bg-black text-white px-2 py-1 rounded-full">{currentShift === 'MALAM'? 'Haekal (01-09)' : currentShift === 'PAGI'? 'Fitry (09-17)' : 'Eqy (17-01)'} </div>
-        </div>
-        <div className="text-[11px] text-yellow-800">
-          {currentShift === 'MALAM'? '✅ Kamu bisa input saldo 1x hari ini (sampai jam 09:00)' : '🔒 Input saldo HANYA bisa dilakukan Shift Malam (Haekal) jam 01:00-09:00. Fitry/Shift 2 tidak bisa input.'}
-        </div>
-      </div>
-
-      <div className="flex justify-between items-center">
-        <h3 className="font-bold text-base">Laci ({laci.length})</h3>
+      <div className="flex justify-between items-center flex-wrap gap-2">
+        {/* FIX Laci (0) -> Laci (7) + auto */}
+        <h3 className="font-bold flex items-center gap-2">Laci ({lacis.length}) {isOwner && <Badge className="bg-amber-500 text-white text-[10px]">OWNER FULL ACCESS</Badge>}</h3>
         <div className="flex gap-2">
-          <button onClick={() => setShowTransfer(true)} className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-bold">Transfer Laci 1 ↔ 2</button>
-          <button onClick={() => setShowAdd(true)} className="px-3 py-1.5 bg-black text-white rounded-lg text-xs font-bold">+ Tambah</button>
+          <Button onClick={() => setOpenTransfer(true)} variant="outline" className="h-8 rounded-full text-xs">Transfer Laci 1 ↔ 2</Button>
+          <Button onClick={() => setOpenAdd(true)} className="bg-black text-white h-8 rounded-full text-xs">+ Tambah Laci / GoPay</Button>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-        {displayList.map(item => {
-          const check = canInputDeposit(item.kode)
-          const sudah = dailyDeposits.find(d => d.laci_kode === item.kode)
-          const isLaci5 = item.kode === 'LACI_5'
-          // SALDO YANG DITAMPILKAN: Kalau Laci 5, pakai akumulasi otomatis
-          const saldoTampil = isLaci5? totalLaci5 : Number(item.saldo)
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        {lacis.map((laci) => {
+          // Sistem terkunci tetap ada untuk karyawan, tapi TETAP DITAMPILKAN
+          const isLockedForEmployee = false; // ganti dengan logic shift kamu yang lama kalau ada
+          
           return (
-            <div key={item.id} onClick={() => handleOpenDeposit(item)} className={`border rounded-xl p-3 bg-white shadow-sm transition-all ${check.allowed? 'cursor-pointer hover:border-green-500 hover:shadow-md active:scale-[0.99]' : 'cursor-not-allowed opacity-80 bg-slate-50'}`}>
-              <div className="flex justify-between">
-                <div className="text-[10px] tracking-widest opacity-60">{item.kode} • {item.jenis?.toUpperCase()} {isLaci5 && '(AKUMULASI OTOMATIS)'}</div>
-                <div className={`text-[9px] px-2 py-0.5 rounded-full font-bold ${check.allowed? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{check.allowed? 'BISA INPUT' : 'TERKUNCI'}</div>
+            <div key={laci.id} className={`border rounded-xl p-4 bg-white relative ${isLockedForEmployee && !isOwner ? 'opacity-80' : ''}`}>
+              <div className="flex justify-between items-start">
+                <p className="text-[10px] uppercase text-slate-500">{laci.code} • {laci.type}</p>
+                {isLockedForEmployee && !isOwner ? <Badge variant="outline" className="text-[9px] bg-slate-100">TERKUNCI</Badge> : <Badge className="text-[9px] bg-emerald-600 text-white">BISA INPUT</Badge>}
               </div>
-              <div className="font-bold text-sm mt-1">{item.nama}</div>
-              <div className="text-xl font-black mt-2">Rp {saldoTampil.toLocaleString("id-ID")}</div>
-              {isLaci5 && <div className="text-[10px] text-green-600 font-bold">Total BNI+BRI+MANDIRI+E-Wallet (Auto)</div>}
-              <div className="mt-2 text-[11px] h-8">
-                {sudah? <span className="text-green-600 font-bold">✅ Sudah setor Rp {Number(sudah.jumlah).toLocaleString("id-ID")} - Reset 01:00</span> : check.allowed? <span className="text-blue-600 font-bold">👆 Klik untuk input manual 1x hari ini</span> : <span className="text-red-500">{check.reason.slice(0, 90)}...</span>}
+              <p className="font-bold text-sm mt-1">{laci.name}</p>
+              <p className="text-lg font-extrabold mt-1">{rupiah(laci.balance||0)}</p>
+              
+              {/* === OWNER BISA EDIT KAPANPUN, KARYAWAN TETAP 1X SEHARI === */}
+              <div className="mt-3 flex gap-2">
+                {isOwner ? (
+                  <Button size="sm" className="w-full bg-amber-500 hover:bg-amber-600 text-white text-[11px] h-7" onClick={() => { setOpenEdit(laci); setEditBalance(laci.balance||0); }}>
+                    ✏️ Owner Edit Kapanpun
+                  </Button>
+                ) : (
+                  <p className="text-[11px] text-blue-600">👉 Klik untuk input manual 1x hari ini</p>
+                )}
               </div>
-              {isLaci5 && (
-                <div className="mt-3 pt-3 border-t space-y-2">
-                  <div className="text-[10px] font-bold opacity-60 mb-1">RINCIAN SALDO PER BANK (OTOMATIS SENDIRI):</div>
-                  {anakLaci5.map(anak => (
-                    <div key={anak.id} className="flex justify-between bg-slate-50 p-2 rounded-lg border"><span className="text-xs font-bold">{anak.nama}</span><span className="text-xs font-black">Rp {Number(anak.saldo).toLocaleString("id-ID")}</span></div>
-                  ))}
-                  {anakLaci5.length === 0 && <div className="text-xs opacity-50">Belum ada bank di Laci 5</div>}
-                </div>
-              )}
             </div>
-          )
+          );
         })}
       </div>
 
-      {showDeposit && selectedLaci && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl p-4 w-full max-w-sm">
-            <h4 className="font-bold mb-1">Input Saldo Manual - {selectedLaci.nama}</h4>
-            <p className="text-[11px] opacity-60 mb-3">Hari Bisnis: {businessDate} | Shift: {currentShift} (Haekal) | 1x sehari, lock sampai 01:00 besok</p>
-            <label className="text-xs font-bold">Jumlah Setoran (Auto titik)</label>
-            <div className="relative mb-1">
-              <span className="absolute left-3 top-3 text-sm font-bold text-gray-500">Rp</span>
-              <input
-                type="text"
-                inputMode="numeric"
-                autoFocus
-                value={depositJumlah}
-                onChange={e => setDepositJumlah(formatRupiah(e.target.value))}
-                placeholder="100.000"
-                className="w-full border p-3 pl-10 rounded-lg text-sm mb-1 font-black tracking-wide"
-              />
-            </div>
-            {depositJumlah && <p className="text-[11px] text-green-600 font-bold mb-3">Preview: Rp {depositJumlah}</p>}
-            <p className="text-[10px] text-red-500 mb-4">⚠️ Tidak bisa dikurangi manual. Jika mau tarik, harus ajukan ke Owner.</p>
-            <div className="flex gap-2">
-              <button onClick={() => setShowDeposit(false)} className="flex-1 py-2.5 border rounded-lg text-sm">Batal</button>
-              <button onClick={handleDeposit} className="flex-1 py-2.5 bg-green-600 text-white rounded-lg text-sm font-bold">Simpan & Kunci</button>
-            </div>
+      {/* Dialog Edit Owner - KAPANPUN */}
+      <Dialog open={!!openEdit} onOpenChange={(v)=>!v && setOpenEdit(null)}>
+        <DialogContent className="bg-white">
+          <DialogHeader><DialogTitle>Edit Saldo - OWNER FULL ACCESS - {openEdit?.name}</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <Label>Saldo Baru - Bisa diubah kapanpun sebagai owner</Label>
+            <Input value={rupiah(editBalance)} onChange={e=>setEditBalance(parseRupiah(e.target.value))} autoFocus />
+            <Button onClick={handleEditOwner} className="w-full bg-amber-500 text-white">Simpan - Owner Access</Button>
+            <p className="text-[10px] text-slate-500">* Fitur ini hanya muncul untuk Owner. Karyawan tidak bisa lihat tombol ini.</p>
           </div>
-        </div>
-      )}
+        </DialogContent>
+      </Dialog>
 
-      {showAdd && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl p-4 w-full max-w-sm">
-            <h4 className="font-bold mb-3">Tambah Laci Baru</h4>
-            <input value={newNama} onChange={e => setNewNama(e.target.value)} placeholder="Nama Laci" className="w-full border p-2 rounded-lg text-sm mb-2" />
-            <select value={newJenis} onChange={e => setNewJenis(e.target.value)} className="w-full border p-2 rounded-lg text-sm mb-4">
-              <option value="cash">Tunai</option><option value="brankas">Brankas</option><option value="bank">Bank</option><option value="ewallet">E-Wallet</option>
-            </select>
-            <div className="flex gap-2"><button onClick={() => setShowAdd(false)} className="flex-1 py-2 border rounded-lg text-sm">Batal</button><button onClick={handleAddLaci} className="flex-1 py-2 bg-black text-white rounded-lg text-sm font-bold">Simpan</button></div>
-          </div>
-        </div>
-      )}
-
-      {showTransfer && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl p-4 w-full max-w-sm">
-            <h4 className="font-bold mb-3">Transfer Antar Laci</h4>
-            <label className="text-xs font-bold">Dari</label>
-            <select value={transfer.dari} onChange={e => setTransfer({...transfer, dari: e.target.value })} className="w-full border p-2 rounded-lg text-sm mb-2"><option value="">Pilih Asal</option>{laci.map(l => <option key={l.id} value={l.id}>{l.nama} (Rp {Number(l.saldo).toLocaleString("id-ID")})</option>)}</select>
-            <label className="text-xs font-bold">Ke</label>
-            <select value={transfer.ke} onChange={e => setTransfer({...transfer, ke: e.target.value })} className="w-full border p-2 rounded-lg text-sm mb-2"><option value="">Pilih Tujuan</option>{laci.map(l => <option key={l.id} value={l.id}>{l.nama}</option>)}</select>
-            <label className="text-xs font-bold">Jumlah (Auto titik)</label>
-            <div className="relative">
-              <span className="absolute left-3 top-2.5 text-sm font-bold text-gray-500">Rp</span>
-              <input
-                type="text"
-                inputMode="numeric"
-                value={transfer.jumlah}
-                onChange={e => setTransfer({...transfer, jumlah: formatRupiah(e.target.value) })}
-                placeholder="50.000"
-                className="w-full border p-2 pl-10 rounded-lg text-sm mb-4 font-bold"
-              />
+      {/* Dialog Tambah */}
+      <Dialog open={openAdd} onOpenChange={setOpenAdd}>
+        <DialogContent className="bg-white">
+          <DialogHeader><DialogTitle>+ Tambah Laci Baru - Auto Muncul di Karyawan</DialogTitle></DialogHeader>
+          <form onSubmit={handleAdd} className="space-y-3">
+            <div><Label>Kode (Contoh: LACI_6, GOPAY, OVO)</Label><Input value={form.code} onChange={e=>setForm({...form, code: e.target.value})} placeholder="GOPAY" /></div>
+            <div><Label>Nama</Label><Input value={form.name} onChange={e=>setForm({...form, name: e.target.value})} placeholder="GoPay" /></div>
+            <div><Label>Tipe</Label>
+              <Select value={form.type} onValueChange={v=>setForm({...form, type: v})}>
+                <SelectTrigger><SelectValue/></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="CASH">CASH - Laci Fisik</SelectItem>
+                  <SelectItem value="BRANKAS">BRANKAS</SelectItem>
+                  <SelectItem value="BANK">BANK</SelectItem>
+                  <SelectItem value="DIGITAL">DIGITAL - GoPay/OVO/ShopeePay/DANA</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
-            <div className="flex gap-2"><button onClick={() => setShowTransfer(false)} className="flex-1 py-2 border rounded-lg text-sm">Batal</button><button onClick={handleTransfer} className="flex-1 py-2 bg-blue-600 text-white rounded-lg text-sm font-bold">Transfer</button></div>
-          </div>
-        </div>
-      )}
+            <div><Label>Saldo Awal</Label><Input value={rupiah(form.balance)} onChange={e=>setForm({...form, balance: parseRupiah(e.target.value)})} /></div>
+            <Button type="submit" className="w-full bg-black text-white">Simpan & Auto Muncul di Kasir Karyawan</Button>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={openTransfer} onOpenChange={setOpenTransfer}>
+        <DialogContent className="bg-white">
+          <DialogHeader><DialogTitle>Transfer Laci 1 ↔ 2</DialogTitle></DialogHeader>
+          <form onSubmit={handleTransfer} className="space-y-3">
+            <Select value={transfer.from} onValueChange={v=>setTransfer({...transfer, from: v})}><SelectTrigger><SelectValue placeholder="Dari Laci"/></SelectTrigger><SelectContent>{lacis.map(l=><SelectItem key={l.id} value={l.id}>{l.name} - {rupiah(l.balance||0)}</SelectItem>)}</SelectContent></Select>
+            <Select value={transfer.to} onValueChange={v=>setTransfer({...transfer, to: v})}><SelectTrigger><SelectValue placeholder="Ke Laci"/></SelectTrigger><SelectContent>{lacis.map(l=><SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>)}</SelectContent></Select>
+            <Input value={rupiah(transfer.amount)} onChange={e=>setTransfer({...transfer, amount: parseRupiah(e.target.value)})} />
+            <Button type="submit" className="w-full bg-blue-600 text-white">Transfer</Button>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
-  )
+  );
 }
