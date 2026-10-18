@@ -17,7 +17,6 @@ async function fetchAllLaci(outletId) {
     .from("laci")
     .select("*")
     .eq("outlet_id", outletId)
-    .eq("is_active", true)
     .order("code", { ascending: true });
   if (error) throw error;
   return data || [];
