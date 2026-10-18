@@ -10,7 +10,7 @@ import { supabase } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import { rupiah, parseRupiah } from "@/lib/format";
 import { useAuth } from "@/context/AuthContext";
-
+import BackupFull from "@/components/pembukuan/BackupFull";
 async function fetchAllLaci(outletId) {
   if (!outletId) return [];
   const { data, error } = await supabase.from("laci").select("*").eq("outlet_id", outletId).order("kode", { ascending: true });
