@@ -95,6 +95,7 @@ export default function LaciManager({ outletId }) {
 
   return (
     <div className="space-y-4">
+      <BackupFull outletId={outletId} />
       <div className="flex justify-between items-center flex-wrap gap-2">
         <h3 className="font-bold flex items-center gap-2">Laci ({lacis.length}) {isOwner && <Badge className="bg-amber-500 text-white text-[10px]">OWNER FULL ACCESS</Badge>}</h3>
         <div className="flex gap-2">
