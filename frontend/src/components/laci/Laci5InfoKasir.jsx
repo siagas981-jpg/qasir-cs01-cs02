@@ -1,46 +1,45 @@
 import { useEffect, useState, useCallback } from "react"
 import { supabase } from "@/lib/supabase/client"
 
-// 1. TERIMA outletId DARI DROPDOWN INDUK
 export default function Laci5InfoKasir({ outletId }) {
   const [total, setTotal] = useState(0)
   const [rincian, setRincian] = useState([])
   const [loading, setLoading] = useState(true)
 
   const fetchLaci5 = useCallback(async () => {
-    // 2. KALAU BELUM PILIH OUTLET, JANGAN LOAD
-    if (!outletId) { 
-      setLoading(false); 
-      setRincian([]);
-      setTotal(0);
-      return 
+    if (!outletId) {
+      setLoading(false)
+      setRincian([])
+      setTotal(0)
+      return
     }
 
-    // 3. LANGSUNG PAKAI outletId DARI PROP (HAPUS fetch profile)
     const { data: laci } = await supabase
       .from("laci")
       .select("*")
       .eq("outlet_id", outletId)
-      .order("kode", {ascending: true})
-      
-    if (!laci) { setLoading(false); return }
-    
-    const laci5 = laci.find(l => l.kode === 'LACI_5')
-    if (!laci5) { 
-      setRincian([]);
-      setTotal(0);
-      setLoading(false); 
-      return 
+      .order("kode", { ascending: true })
+
+    if (!laci) {
+      setLoading(false)
+      return
     }
 
-    // Ambil semua anak Laci 5, termasuk yang saldo 0 (DANA)
-    const anak = laci.filter(l => l.parent_id === laci5.id)
-    
+    const laci5 = laci.find((l) => l.kode === "LACI_5")
+    if (!laci5) {
+      setRincian([])
+      setTotal(0)
+      setLoading(false)
+      return
+    }
+
+    const anak = laci.filter((l) => l.parent_id === laci5.id)
+
     const sum = anak.reduce((s, a) => s + Number(a.saldo || 0), 0)
     setTotal(sum)
     setRincian(anak)
     setLoading(false)
-  }, [outletId]) // 4. DEPENDENCY JADI outletId
+  }, [outletId])
 
   useEffect(() => {
     fetchLaci5()
@@ -59,7 +58,7 @@ export default function Laci5InfoKasir({ outletId }) {
       </div>
       <div className="text-lg font-black mt-1 text-blue-900">Rp {total.toLocaleString("id-ID")}</div>
       <div className="space-y-1 mt-2 pt-2 border-t border-blue-100">
-        {rincian.map(bank => (
+        {rincian.map((bank) => (
           <div key={bank.id} className="flex justify-between bg-white p-2 rounded-lg text-[11px] border border-blue-100">
             <span className="font-bold">{bank.nama}</span>
             <span className="font-black">Rp {Number(bank.saldo).toLocaleString("id-ID")}</span>
