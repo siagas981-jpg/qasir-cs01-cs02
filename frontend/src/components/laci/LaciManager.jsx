@@ -56,12 +56,7 @@ export default function LaciManager({ outletId }) {
 
   const handleEditFull = async () => {
     if (!openEdit) return;
-    const { error } = await supabase.from("laci").update({ 
-      kode: openEdit.kode.toUpperCase(), 
-      nama: openEdit.nama, 
-      jenis: openEdit.jenis, 
-      saldo: openEdit.saldo 
-    }).eq("id", openEdit.id);
+    const { error } = await supabase.from("laci").update({ kode: openEdit.kode.toUpperCase(), nama: openEdit.nama, jenis: openEdit.jenis, saldo: openEdit.saldo }).eq("id", openEdit.id);
     if (error) return toast.error(error.message);
     toast.success(`Laci ${openEdit.nama} berhasil diupdate`);
     setOpenEdit(null);
@@ -93,106 +88,45 @@ export default function LaciManager({ outletId }) {
   if (isLoading) return <div className="p-2 text-[10px]">Memuat...</div>;
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-1.5">
       <BackupFull outletId={outletId} />
-      {/* HEADER COMPACT */}
+      {/* HEADER ULTRA MINI */}
       <div className="flex justify-between items-center">
-        <h3 className="font-bold text-[11px] flex items-center gap-1">Laci ({lacis.length}) {isOwner && <Badge className="bg-amber-500 text-white text-[8px] h-4 px-1">OWNER</Badge>}</h3>
+        <h3 className="font-bold text-[10px] flex items-center gap-1">Laci ({lacis.length}) {isOwner && <Badge className="bg-amber-500 text-white text-[6px] h-3 px-1">OWNER</Badge>}</h3>
         <div className="flex gap-1">
-          <Button onClick={() => setOpenTransfer(true)} variant="outline" className="h-6 rounded-full text-[10px] px-2">Transfer</Button>
-          <Button onClick={() => setOpenAdd(true)} className="bg-black text-white h-6 rounded-full text-[10px] px-2">+ Tambah</Button>
+          <Button onClick={() => setOpenTransfer(true)} variant="outline" className="h-5 rounded-full text-[8px] px-2">Transfer</Button>
+          <Button onClick={() => setOpenAdd(true)} className="bg-black text-white h-5 rounded-full text-[8px] px-2">+ Tambah</Button>
         </div>
       </div>
 
-      {/* GRID COMPACT 2 KOLOM - KUNCI BIAR MUAT 1 LAYAR */}
-      <div className="grid grid-cols-2 gap-2">
+      {/* GRID 4 KOLOM - INI KUNCINYA BIAR MUAT 1 LAYAR */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-1">
         {lacis.map((laci) => (
-          <div key={laci.id} className="border rounded-lg p-2 bg-white relative hover:shadow-sm transition-all">
-            <div className="flex justify-between items-start leading-none">
-              <p className="text-[7px] uppercase text-slate-400 font-bold tracking-widest truncate">{laci.kode} • {laci.jenis}</p>
-              <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse shrink-0 ml-1"></div>
+          <div key={laci.id} className="border rounded-md p-1.5 bg-white leading-none">
+            <div className="flex justify-between">
+              <p className="text-[6px] uppercase text-slate-400 font-bold tracking-widest truncate w-[85%]">{laci.kode} • {laci.jenis}</p>
+              <div className="w-1 h-1 bg-emerald-500 rounded-full animate-pulse"></div>
             </div>
-            <p className="font-bold text-[11px] mt-1 leading-tight truncate">{laci.nama}</p>
-            <p className="text-[13px] font-black mt-0.5 leading-none">{rupiah(laci.saldo||0)}</p>
-            
+            <p className="font-bold text-[9px] mt-1 truncate leading-tight">{laci.nama}</p>
+            <p className="text-[11px] font-black mt-0.5">{rupiah(laci.saldo||0)}</p>
             {isOwner ? (
-              <div className="mt-1.5 flex gap-1">
-                <Button size="sm" className="flex-1 bg-amber-500 hover:bg-amber-600 text-white text-[8px] h-5 px-1 rounded" onClick={() => setOpenEdit(laci)}>
-                  ✏️ Edit
-                </Button>
-                <Button size="sm" variant="outline" className="text-[8px] h-5 px-1.5 rounded text-red-600 border-red-200" onClick={() => handleDelete(laci)}>
-                  🗑️
-                </Button>
+              <div className="mt-1 flex gap-0.5">
+                <Button size="sm" className="flex-1 bg-amber-500 hover:bg-amber-600 text-white text-[7px] h-4 px-1 rounded-sm" onClick={() => setOpenEdit(laci)}>Edit</Button>
+                <Button size="sm" variant="outline" className="text-[7px] h-4 px-1 rounded-sm" onClick={() => handleDelete(laci)}>🗑️</Button>
               </div>
             ) : (
-              <p className="text-[7px] text-slate-400 mt-1">Karyawan: transfer only</p>
+              <p className="text-[6px] text-slate-400 mt-0.5">karyawan</p>
             )}
           </div>
         ))}
       </div>
 
-      {/* Dialogs tetap sama */}
       <Dialog open={!!openEdit} onOpenChange={(v)=>!v && setOpenEdit(null)}>
-        <DialogContent className="bg-white">
-          <DialogHeader><DialogTitle className="text-sm">Edit Laci - OWNER</DialogTitle></DialogHeader>
-          {openEdit && (
-            <div className="space-y-3">
-              <div><Label className="text-xs">Kode</Label><Input value={openEdit.kode} onChange={e=>setOpenEdit({...openEdit, kode: e.target.value})} className="h-8 text-sm" /></div>
-              <div><Label className="text-xs">Nama</Label><Input value={openEdit.nama} onChange={e=>setOpenEdit({...openEdit, nama: e.target.value})} className="h-8 text-sm" /></div>
-              <div><Label className="text-xs">Jenis</Label>
-                <Select value={openEdit.jenis} onValueChange={v=>setOpenEdit({...openEdit, jenis: v})}>
-                  <SelectTrigger className="h-8"><SelectValue/></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="CASH">CASH</SelectItem>
-                    <SelectItem value="BRANKAS">BRANKAS</SelectItem>
-                    <SelectItem value="BANK">BANK</SelectItem>
-                    <SelectItem value="DIGITAL">DIGITAL</SelectItem>
-                    <SelectItem value="EWALLET">EWALLET</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div><Label className="text-xs">Saldo</Label><Input value={rupiah(openEdit.saldo||0)} onChange={e=>setOpenEdit({...openEdit, saldo: parseRupiah(e.target.value)})} className="h-8 text-sm" /></div>
-              <Button onClick={handleEditFull} className="w-full bg-amber-500 text-white h-8 text-sm">Simpan</Button>
-            </div>
-          )}
-        </DialogContent>
+        <DialogContent className="bg-white"><DialogHeader><DialogTitle className="text-sm">Edit Laci - OWNER</DialogTitle></DialogHeader>
+          {openEdit && (<div className="space-y-2"><div><Label className="text-xs">Kode</Label><Input value={openEdit.kode} onChange={e=>setOpenEdit({...openEdit, kode: e.target.value})} className="h-7 text-xs" /></div><div><Label className="text-xs">Nama</Label><Input value={openEdit.nama} onChange={e=>setOpenEdit({...openEdit, nama: e.target.value})} className="h-7 text-xs" /></div><div><Label className="text-xs">Jenis</Label><Select value={openEdit.jenis} onValueChange={v=>setOpenEdit({...openEdit, jenis: v})}><SelectTrigger className="h-7"><SelectValue/></SelectTrigger><SelectContent><SelectItem value="CASH">CASH</SelectItem><SelectItem value="BRANKAS">BRANKAS</SelectItem><SelectItem value="BANK">BANK</SelectItem><SelectItem value="DIGITAL">DIGITAL</SelectItem><SelectItem value="EWALLET">EWALLET</SelectItem></SelectContent></Select></div><div><Label className="text-xs">Saldo</Label><Input value={rupiah(openEdit.saldo||0)} onChange={e=>setOpenEdit({...openEdit, saldo: parseRupiah(e.target.value)})} className="h-7 text-xs" /></div><Button onClick={handleEditFull} className="w-full bg-amber-500 text-white h-7 text-xs">Simpan</Button></div>)}</DialogContent>
       </Dialog>
-
-      <Dialog open={openAdd} onOpenChange={setOpenAdd}>
-        <DialogContent className="bg-white">
-          <DialogHeader><DialogTitle className="text-sm">+ Tambah Laci</DialogTitle></DialogHeader>
-          <form onSubmit={handleAdd} className="space-y-3">
-            <div><Label className="text-xs">Kode</Label><Input value={form.kode} onChange={e=>setForm({...form, kode: e.target.value})} placeholder="GOPAY" className="h-8 text-sm" /></div>
-            <div><Label className="text-xs">Nama</Label><Input value={form.nama} onChange={e=>setForm({...form, nama: e.target.value})} placeholder="GoPay" className="h-8 text-sm" /></div>
-            <div><Label className="text-xs">Tipe</Label>
-              <Select value={form.jenis} onValueChange={v=>setForm({...form, jenis: v})}>
-                <SelectTrigger className="h-8"><SelectValue/></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="CASH">CASH</SelectItem>
-                  <SelectItem value="BRANKAS">BRANKAS</SelectItem>
-                  <SelectItem value="BANK">BANK</SelectItem>
-                  <SelectItem value="DIGITAL">DIGITAL</SelectItem>
-                  <SelectItem value="EWALLET">EWALLET</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div><Label className="text-xs">Saldo Awal</Label><Input value={rupiah(form.saldo)} onChange={e=>setForm({...form, saldo: parseRupiah(e.target.value)})} className="h-8 text-sm" /></div>
-            <Button type="submit" className="w-full bg-black text-white h-8 text-sm">Simpan</Button>
-          </form>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={openTransfer} onOpenChange={setOpenTransfer}>
-        <DialogContent className="bg-white">
-          <DialogHeader><DialogTitle className="text-sm">Transfer Laci</DialogTitle></DialogHeader>
-          <form onSubmit={handleTransfer} className="space-y-3">
-            <Select value={transfer.from} onValueChange={v=>setTransfer({...transfer, from: v})}><SelectTrigger className="h-8"><SelectValue placeholder="Dari Laci"/></SelectTrigger><SelectContent>{lacis.map(l=><SelectItem key={l.id} value={l.id}>{l.nama} - {rupiah(l.saldo||0)}</SelectItem>)}</SelectContent></Select>
-            <Select value={transfer.to} onValueChange={v=>setTransfer({...transfer, to: v})}><SelectTrigger className="h-8"><SelectValue placeholder="Ke Laci"/></SelectTrigger><SelectContent>{lacis.map(l=><SelectItem key={l.id} value={l.id}>{l.nama}</SelectItem>)}</SelectContent></Select>
-            <Input value={rupiah(transfer.amount)} onChange={e=>setTransfer({...transfer, amount: parseRupiah(e.target.value)})} className="h-8 text-sm" />
-            <Button type="submit" className="w-full bg-blue-600 text-white h-8 text-sm">Transfer</Button>
-          </form>
-        </DialogContent>
-      </Dialog>
+      <Dialog open={openAdd} onOpenChange={setOpenAdd}><DialogContent className="bg-white"><DialogHeader><DialogTitle className="text-sm">+ Tambah Laci</DialogTitle></DialogHeader><form onSubmit={handleAdd} className="space-y-2"><Input value={form.kode} onChange={e=>setForm({...form, kode: e.target.value})} placeholder="Kode GOPAY" className="h-7 text-xs" /><Input value={form.nama} onChange={e=>setForm({...form, nama: e.target.value})} placeholder="Nama GoPay" className="h-7 text-xs" /><Select value={form.jenis} onValueChange={v=>setForm({...form, jenis: v})}><SelectTrigger className="h-7"><SelectValue/></SelectTrigger><SelectContent><SelectItem value="CASH">CASH</SelectItem><SelectItem value="BRANKAS">BRANKAS</SelectItem><SelectItem value="BANK">BANK</SelectItem><SelectItem value="DIGITAL">DIGITAL</SelectItem><SelectItem value="EWALLET">EWALLET</SelectItem></SelectContent></Select><Input value={rupiah(form.saldo)} onChange={e=>setForm({...form, saldo: parseRupiah(e.target.value)})} className="h-7 text-xs" /><Button type="submit" className="w-full bg-black text-white h-7 text-xs">Simpan</Button></form></DialogContent></Dialog>
+      <Dialog open={openTransfer} onOpenChange={setOpenTransfer}><DialogContent className="bg-white"><DialogHeader><DialogTitle className="text-sm">Transfer</DialogTitle></DialogHeader><form onSubmit={handleTransfer} className="space-y-2"><Select value={transfer.from} onValueChange={v=>setTransfer({...transfer, from: v})}><SelectTrigger className="h-7"><SelectValue placeholder="Dari"/></SelectTrigger><SelectContent>{lacis.map(l=><SelectItem key={l.id} value={l.id}>{l.nama} - {rupiah(l.saldo||0)}</SelectItem>)}</SelectContent></Select><Select value={transfer.to} onValueChange={v=>setTransfer({...transfer, to: v})}><SelectTrigger className="h-7"><SelectValue placeholder="Ke"/></SelectTrigger><SelectContent>{lacis.map(l=><SelectItem key={l.id} value={l.id}>{l.nama}</SelectItem>)}</SelectContent></Select><Input value={rupiah(transfer.amount)} onChange={e=>setTransfer({...transfer, amount: parseRupiah(e.target.value)})} className="h-7 text-xs" /><Button type="submit" className="w-full bg-blue-600 text-white h-7 text-xs">Transfer</Button></form></DialogContent></Dialog>
     </div>
   );
 }
