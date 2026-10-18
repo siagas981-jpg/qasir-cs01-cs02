@@ -23,19 +23,16 @@ export default function LaciManager({ outletId }) {
   const qc = useQueryClient();
   const { profile } = useAuth();
   const isOwner = profile?.role === "owner" || profile?.role === "OWNER" || profile?.is_owner === true;
-
   const [openAdd, setOpenAdd] = useState(false);
   const [openTransfer, setOpenTransfer] = useState(false);
   const [openEdit, setOpenEdit] = useState(null);
   const [form, setForm] = useState({ kode: "", nama: "", jenis: "CASH", saldo: 0 });
   const [transfer, setTransfer] = useState({ from: "", to: "", amount: 0 });
-
   const { data: lacis = [], isLoading } = useQuery({
     queryKey: ["laci-all", outletId],
     queryFn: () => fetchAllLaci(outletId),
     enabled: !!outletId,
   });
-
   useEffect(() => {
     if (!outletId) return;
     const channel = supabase.channel(`laci-${outletId}`).on("postgres_changes", { event: "*", schema: "public", table: "laci", filter: `outlet_id=eq.${outletId}` }, () => {
@@ -44,7 +41,6 @@ export default function LaciManager({ outletId }) {
     }).subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [outletId, qc]);
-
   const handleAdd = async (e) => {
     e.preventDefault();
     const { error } = await supabase.from("laci").insert({ outlet_id: outletId, kode: form.kode.toUpperCase(), nama: form.nama, jenis: form.jenis, saldo: form.saldo });
@@ -53,7 +49,6 @@ export default function LaciManager({ outletId }) {
     setOpenAdd(false);
     setForm({ kode: "", nama: "", jenis: "CASH", saldo: 0 });
   };
-
   const handleEditFull = async () => {
     if (!openEdit) return;
     const { error } = await supabase.from("laci").update({ kode: openEdit.kode.toUpperCase(), nama: openEdit.nama, jenis: openEdit.jenis, saldo: openEdit.saldo }).eq("id", openEdit.id);
@@ -62,7 +57,6 @@ export default function LaciManager({ outletId }) {
     setOpenEdit(null);
     qc.invalidateQueries({ queryKey: ["laci-all", outletId] });
   };
-
   const handleDelete = async (laci) => {
     if (!confirm(`Hapus ${laci.nama} (${laci.kode}) ?`)) return;
     const { error } = await supabase.from("laci").delete().eq("id", laci.id);
@@ -70,7 +64,6 @@ export default function LaciManager({ outletId }) {
     toast.success(`${laci.nama} dihapus`);
     qc.invalidateQueries({ queryKey: ["laci-all", outletId] });
   };
-
   const handleTransfer = async (e) => {
     e.preventDefault();
     const fromLaci = lacis.find(l => l.id === transfer.from);
@@ -84,43 +77,33 @@ export default function LaciManager({ outletId }) {
     setOpenTransfer(false);
     qc.invalidateQueries({ queryKey: ["laci-all", outletId] });
   };
-
   if (isLoading) return <div className="p-2 text-[10px]">Memuat...</div>;
-
   return (
-    <div className="space-y-1.5">
+    <div className="space-y-1">
       <BackupFull outletId={outletId} />
-      {/* HEADER ULTRA MINI */}
       <div className="flex justify-between items-center">
-        <h3 className="font-bold text-[10px] flex items-center gap-1">Laci ({lacis.length}) {isOwner && <Badge className="bg-amber-500 text-white text-[6px] h-3 px-1">OWNER</Badge>}</h3>
-        <div className="flex gap-1">
-          <Button onClick={() => setOpenTransfer(true)} variant="outline" className="h-5 rounded-full text-[8px] px-2">Transfer</Button>
-          <Button onClick={() => setOpenAdd(true)} className="bg-black text-white h-5 rounded-full text-[8px] px-2">+ Tambah</Button>
+        <h3 className="font-bold text-[9px] flex items-center gap-1">Laci ({lacis.length}) {isOwner && <Badge className="bg-amber-500 text-white text-[5px] h-3 px-1">OWNER</Badge>}</h3>
+        <div className="flex gap-0.5">
+          <Button onClick={() => setOpenTransfer(true)} variant="outline" className="h-4 rounded-full text-[6px] px-1.5">Transfer</Button>
+          <Button onClick={() => setOpenAdd(true)} className="bg-black text-white h-4 rounded-full text-[6px] px-1.5">+ Tambah</Button>
         </div>
       </div>
-
-      {/* GRID 4 KOLOM - INI KUNCINYA BIAR MUAT 1 LAYAR */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-1">
+      {/* INI KUNCI: 3 KOLOM SUPER MINI UNTUK TAMPILAN AWAL KASIR */}
+      <div className="grid grid-cols-3 gap-1">
         {lacis.map((laci) => (
-          <div key={laci.id} className="border rounded-md p-1.5 bg-white leading-none">
-            <div className="flex justify-between">
-              <p className="text-[6px] uppercase text-slate-400 font-bold tracking-widest truncate w-[85%]">{laci.kode} • {laci.jenis}</p>
-              <div className="w-1 h-1 bg-emerald-500 rounded-full animate-pulse"></div>
-            </div>
-            <p className="font-bold text-[9px] mt-1 truncate leading-tight">{laci.nama}</p>
-            <p className="text-[11px] font-black mt-0.5">{rupiah(laci.saldo||0)}</p>
-            {isOwner ? (
-              <div className="mt-1 flex gap-0.5">
-                <Button size="sm" className="flex-1 bg-amber-500 hover:bg-amber-600 text-white text-[7px] h-4 px-1 rounded-sm" onClick={() => setOpenEdit(laci)}>Edit</Button>
-                <Button size="sm" variant="outline" className="text-[7px] h-4 px-1 rounded-sm" onClick={() => handleDelete(laci)}>🗑️</Button>
+          <div key={laci.id} className="border rounded-[6px] p-1 bg-white leading-none">
+            <p className="text-[5px] uppercase text-slate-400 font-bold truncate">{laci.kode}</p>
+            <p className="font-bold text-[7px] truncate leading-tight mt-0.5">{laci.nama}</p>
+            <p className="text-[8px] font-black mt-0.5 leading-none">{rupiah(laci.saldo||0)}</p>
+            {isOwner && (
+              <div className="mt-0.5 flex gap-0.5">
+                <Button size="sm" className="flex-1 bg-amber-500 hover:bg-amber-600 text-white text-[5px] h-3.5 px-0 rounded-sm" onClick={() => setOpenEdit(laci)}>Edit</Button>
+                <Button size="sm" variant="outline" className="text-[5px] h-3.5 w-4 p-0 rounded-sm" onClick={() => handleDelete(laci)}>X</Button>
               </div>
-            ) : (
-              <p className="text-[6px] text-slate-400 mt-0.5">karyawan</p>
             )}
           </div>
         ))}
       </div>
-
       <Dialog open={!!openEdit} onOpenChange={(v)=>!v && setOpenEdit(null)}>
         <DialogContent className="bg-white"><DialogHeader><DialogTitle className="text-sm">Edit Laci - OWNER</DialogTitle></DialogHeader>
           {openEdit && (<div className="space-y-2"><div><Label className="text-xs">Kode</Label><Input value={openEdit.kode} onChange={e=>setOpenEdit({...openEdit, kode: e.target.value})} className="h-7 text-xs" /></div><div><Label className="text-xs">Nama</Label><Input value={openEdit.nama} onChange={e=>setOpenEdit({...openEdit, nama: e.target.value})} className="h-7 text-xs" /></div><div><Label className="text-xs">Jenis</Label><Select value={openEdit.jenis} onValueChange={v=>setOpenEdit({...openEdit, jenis: v})}><SelectTrigger className="h-7"><SelectValue/></SelectTrigger><SelectContent><SelectItem value="CASH">CASH</SelectItem><SelectItem value="BRANKAS">BRANKAS</SelectItem><SelectItem value="BANK">BANK</SelectItem><SelectItem value="DIGITAL">DIGITAL</SelectItem><SelectItem value="EWALLET">EWALLET</SelectItem></SelectContent></Select></div><div><Label className="text-xs">Saldo</Label><Input value={rupiah(openEdit.saldo||0)} onChange={e=>setOpenEdit({...openEdit, saldo: parseRupiah(e.target.value)})} className="h-7 text-xs" /></div><Button onClick={handleEditFull} className="w-full bg-amber-500 text-white h-7 text-xs">Simpan</Button></div>)}</DialogContent>
