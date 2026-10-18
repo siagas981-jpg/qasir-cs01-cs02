@@ -1,37 +1,50 @@
 import { useEffect, useState, useCallback } from "react"
 import { supabase } from "@/lib/supabase/client"
 
-export default function Laci5InfoKasir() {
+// 1. TERIMA outletId DARI DROPDOWN INDUK
+export default function Laci5InfoKasir({ outletId }) {
   const [total, setTotal] = useState(0)
   const [rincian, setRincian] = useState([])
   const [loading, setLoading] = useState(true)
 
   const fetchLaci5 = useCallback(async () => {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
-    const { data: profile } = await supabase.from("profiles").select("outlet_id").eq("id", user.id).single()
-    const outletId = profile?.outlet_id
-    if (!outletId) { setLoading(false); return }
+    // 2. KALAU BELUM PILIH OUTLET, JANGAN LOAD
+    if (!outletId) { 
+      setLoading(false); 
+      setRincian([]);
+      setTotal(0);
+      return 
+    }
 
-    const { data: laci } = await supabase.from("laci").select("*").eq("outlet_id", outletId).order("kode", {ascending: true})
+    // 3. LANGSUNG PAKAI outletId DARI PROP (HAPUS fetch profile)
+    const { data: laci } = await supabase
+      .from("laci")
+      .select("*")
+      .eq("outlet_id", outletId)
+      .order("kode", {ascending: true})
+      
     if (!laci) { setLoading(false); return }
     
     const laci5 = laci.find(l => l.kode === 'LACI_5')
-    if (!laci5) { setLoading(false); return }
+    if (!laci5) { 
+      setRincian([]);
+      setTotal(0);
+      setLoading(false); 
+      return 
+    }
 
-    // FIX: Ambil semua anak Laci 5, termasuk yang saldo 0 (DANA)
-    // Jangan filter >0, biar DANA Rp 0 tetap muncul!
+    // Ambil semua anak Laci 5, termasuk yang saldo 0 (DANA)
     const anak = laci.filter(l => l.parent_id === laci5.id)
     
     const sum = anak.reduce((s, a) => s + Number(a.saldo || 0), 0)
     setTotal(sum)
     setRincian(anak)
     setLoading(false)
-  }, [])
+  }, [outletId]) // 4. DEPENDENCY JADI outletId
 
   useEffect(() => {
     fetchLaci5()
-    const interval = setInterval(fetchLaci5, 10000) // 10 detik auto update
+    const interval = setInterval(fetchLaci5, 10000)
     return () => clearInterval(interval)
   }, [fetchLaci5])
 
