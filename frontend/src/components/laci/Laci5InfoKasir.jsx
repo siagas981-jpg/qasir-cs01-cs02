@@ -1,13 +1,29 @@
 import { useEffect, useState, useCallback } from "react"
 import { supabase } from "@/lib/supabase/client"
 
-export default function Laci5InfoKasir({ outletId }) {
+export default function Laci5InfoKasir({ outletId: propOutletId }) {
   const [total, setTotal] = useState(0)
   const [rincian, setRincian] = useState([])
   const [loading, setLoading] = useState(true)
 
   const fetchLaci5 = useCallback(async () => {
-    if (!outletId) {
+    let finalOutletId = propOutletId
+
+    // 1. JIKA ADA DARI DROPDOWN (Opsi 1), pakai itu
+    // 2. JIKA TIDAK ADA, pakai outlet dari profile (biar ga hilang)
+    if (!finalOutletId) {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("outlet_id")
+          .eq("id", user.id)
+          .single()
+        finalOutletId = profile?.outlet_id
+      }
+    }
+
+    if (!finalOutletId) {
       setLoading(false)
       setRincian([])
       setTotal(0)
@@ -17,7 +33,7 @@ export default function Laci5InfoKasir({ outletId }) {
     const { data: laci } = await supabase
       .from("laci")
       .select("*")
-      .eq("outlet_id", outletId)
+      .eq("outlet_id", finalOutletId)
       .order("kode", { ascending: true })
 
     if (!laci) {
@@ -33,13 +49,14 @@ export default function Laci5InfoKasir({ outletId }) {
       return
     }
 
+    // TAMPILKAN SEMUA, TERMASUK SALDO 0 (ini perbaikan Opsi 1)
     const anak = laci.filter((l) => l.parent_id === laci5.id)
 
     const sum = anak.reduce((s, a) => s + Number(a.saldo || 0), 0)
     setTotal(sum)
     setRincian(anak)
     setLoading(false)
-  }, [outletId])
+  }, [propOutletId])
 
   useEffect(() => {
     fetchLaci5()
