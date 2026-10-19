@@ -62,8 +62,12 @@ function StockReport({ outletId }) {
       </div>
       <TableShell testId="stock-report-table">
         <colgroup><col style={{width:"35%"}}/><col style={{width:"20%"}}/><col style={{width:"12%"}}/><col style={{width:"13%"}}/><col style={{width:"20%"}}/></colgroup>
-        <thead><tr className="border-b bg-slate-50/80 text-left text-[10px] uppercase tracking-wider text-slate-500">
-          <th className="py-2.5 px-3 font-bold text-left">Nama</th><th className="py-2.5 px-3 font-bold text-left">SKU</th><th className="py-2.5 px-3 font-bold text-left">Stok</th><th className="py-2.5 px-3 font-bold text-left">Stok Min</th><th className="py-2.5 px-3 font-bold text-left">Status</th>
+        <thead><tr className="border-b bg-slate-50/80 text-[10px] uppercase tracking-wider text-slate-500">
+          <th className="py-2.5 px-3 font-bold text-left">NAMA</th>
+          <th className="py-2.5 px-3 font-bold text-left">SKU</th>
+          <th className="py-2.5 px-3 font-bold text-center">STOK</th>
+          <th className="py-2.5 px-3 font-bold text-center">STOK MIN</th>
+          <th className="py-2.5 px-3 font-bold text-center">STATUS</th>
         </tr></thead>
         <tbody>
           {isLoading && <tr><td className="py-6 px-3 text-slate-500 text-[11px]" colSpan={5}>Memuat…</td></tr>}
@@ -74,9 +78,9 @@ function StockReport({ outletId }) {
               <tr key={p.id} className={`border-b last:border-b-0 ${habisRow ? "bg-rose-50/70" : "bg-amber-50/40"}`}>
                 <td className="py-2.5 px-3 text-left font-semibold text-slate-900">{p.name}</td>
                 <td className="py-2.5 px-3 text-left font-mono text-slate-500">{p.sku}</td>
-                <td className={`py-2.5 px-3 text-left font-mono font-bold ${habisRow ? "text-rose-600" : "text-amber-600"}`}>{p.stock}</td>
-                <td className="py-2.5 px-3 text-left font-mono text-slate-500">{p.min_stock ?? 0}</td>
-                <td className="py-2.5 px-3 text-left">{habisRow ? <Badge className="bg-rose-600 text-white text-[10px] h-5">Habis</Badge> : <Badge className="bg-amber-500 text-white text-[10px] h-5">Menipis</Badge>}</td>
+                <td className={`py-2.5 px-3 text-center font-mono font-bold tabular-nums ${habisRow ? "text-rose-600" : "text-amber-600"}`}>{p.stock}</td>
+                <td className="py-2.5 px-3 text-center font-mono tabular-nums text-slate-500">{p.min_stock ?? 0}</td>
+                <td className="py-2.5 px-3 text-center">{habisRow ? <Badge className="bg-rose-600 text-white text-[10px] h-5 px-2">Habis</Badge> : <Badge className="bg-amber-500 text-white text-[10px] h-5 px-2">Menipis</Badge>}</td>
               </tr>
             );
           })}
