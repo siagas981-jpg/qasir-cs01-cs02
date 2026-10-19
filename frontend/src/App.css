@@ -1,2 +1,19 @@
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { scrollbar-width: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { scrollbar-width: none; }
+
+/* LACI DEPAN KASIR - 3 KOLOM ENAK DIPANDANG */
+.laci-compact { 
+  display: grid !important; 
+  grid-template-columns: repeat(3, 1fr) !important; 
+  gap: 8px !important; 
+}
+.laci-compact > div {
+  padding: 8px !important;
+  border-radius: 8px !important;
+}
+.laci-compact p { 
+  font-size: 11px !important; 
+  line-height: 1.2 !important; 
+}
