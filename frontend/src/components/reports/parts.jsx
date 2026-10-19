@@ -16,10 +16,10 @@ export const formatShort = (n) => {
 
 export function PageHeader({ outlet, title, subtitle }) {
   return (
-    <div className="mb-6">
-      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-700">{outlet?.name}</p>
-      <h1 className="font-heading text-3xl sm:text-4xl font-extrabold tracking-tight">{title}</h1>
-      {subtitle && <p className="text-sm text-muted-foreground mt-1">{subtitle}</p>}
+    <div className="w-full mb-4 text-left">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-emerald-700 text-left">{outlet?.name}</p>
+      <h1 className="font-heading text-2xl font-extrabold tracking-tight text-left">{title}</h1>
+      {subtitle && <p className="text-[11px] text-slate-500 mt-0.5 text-left">{subtitle}</p>}
     </div>
   );
 }
@@ -27,27 +27,27 @@ export function PageHeader({ outlet, title, subtitle }) {
 export function RangeBar({ range, showPresets = true, children }) {
   const { preset, setPreset, from, to, setFrom, setTo } = range;
   return (
-    <div className="flex flex-wrap items-end gap-3 mb-5">
+    <div className="flex flex-wrap items-end gap-2 mb-3 w-full">
       {showPresets && (
-        <div className="space-y-1.5">
-          <Label className="text-xs">Periode</Label>
+        <div className="space-y-1">
+          <Label className="text-[10px]">Periode</Label>
           <Select value={preset} onValueChange={setPreset}>
-            <SelectTrigger className="w-[150px] bg-white" data-testid="range-preset"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="w-[130px] h-9 bg-white text-[11px]" data-testid="range-preset"><SelectValue /></SelectTrigger>
             <SelectContent>
               {Object.entries(PERIOD_LABELS).map(([k, v]) => (
-                <SelectItem key={k} value={k} data-testid={`range-preset-${k}`}>{v}</SelectItem>
+                <SelectItem key={k} value={k} className="text-[11px]" data-testid={`range-preset-${k}`}>{v}</SelectItem>
               ))}
             </SelectContent>
           </Select>
         </div>
       )}
-      <div className="space-y-1.5">
-        <Label className="text-xs">Dari</Label>
-        <Input type="date" className="w-[160px] bg-white" value={toDateStr(from)} onChange={(e) => e.target.value && setFrom(new Date(e.target.value))} data-testid="range-from" />
+      <div className="space-y-1">
+        <Label className="text-[10px]">Dari</Label>
+        <Input type="date" className="w-[140px] h-9 bg-white text-[11px]" value={toDateStr(from)} onChange={(e) => e.target.value && setFrom(new Date(e.target.value))} data-testid="range-from" />
       </div>
-      <div className="space-y-1.5">
-        <Label className="text-xs">Sampai</Label>
-        <Input type="date" className="w-[160px] bg-white" value={toDateStr(to)} onChange={(e) => e.target.value && setTo(new Date(e.target.value))} data-testid="range-to" />
+      <div className="space-y-1">
+        <Label className="text-[10px]">Sampai</Label>
+        <Input type="date" className="w-[140px] h-9 bg-white text-[11px]" value={toDateStr(to)} onChange={(e) => e.target.value && setTo(new Date(e.target.value))} data-testid="range-to" />
       </div>
       {children}
     </div>
@@ -57,11 +57,11 @@ export function RangeBar({ range, showPresets = true, children }) {
 export function ExportButtons({ onExcel, onPDF, idPrefix = "report" }) {
   return (
     <div className="flex items-end gap-2 ml-auto">
-      <Button variant="outline" onClick={onExcel} className="gap-2 border-emerald-200 text-emerald-700 hover:bg-emerald-50" data-testid={`${idPrefix}-export-excel`}>
-        <FileSpreadsheet className="h-4 w-4" /> Excel
+      <Button variant="outline" size="sm" onClick={onExcel} className="h-9 gap-1.5 border-emerald-200 text-emerald-700 hover:bg-emerald-50 text-[11px]" data-testid={`${idPrefix}-export-excel`}>
+        <FileSpreadsheet className="h-3.5 w-3.5" /> Excel
       </Button>
-      <Button variant="outline" onClick={onPDF} className="gap-2 border-rose-200 text-rose-700 hover:bg-rose-50" data-testid={`${idPrefix}-export-pdf`}>
-        <FileText className="h-4 w-4" /> PDF
+      <Button variant="outline" size="sm" onClick={onPDF} className="h-9 gap-1.5 border-rose-200 text-rose-700 hover:bg-rose-50 text-[11px]" data-testid={`${idPrefix}-export-pdf`}>
+        <FileText className="h-3.5 w-3.5" /> PDF
       </Button>
     </div>
   );
@@ -76,17 +76,19 @@ export function StatCard({ label, value, accent = "slate", testId }) {
     sky: "from-sky-50 to-white border-sky-200 text-sky-700",
   };
   return (
-    <div className={`rounded-xl border bg-gradient-to-b ${accents[accent]} px-5 py-4 min-w-[180px]`} data-testid={testId}>
-      <p className="text-xs font-semibold uppercase tracking-wider opacity-70">{label}</p>
-      <p className="text-2xl font-extrabold font-mono mt-1">{value}</p>
+    <div className={`rounded-xl border bg-gradient-to-b ${accents[accent]} px-4 py-3 min-w-[150px]`} data-testid={testId}>
+      <p className="text-[10px] font-semibold uppercase tracking-wider opacity-70 text-left">{label}</p>
+      <p className="text-xl font-extrabold font-mono mt-1 text-left">{value}</p>
     </div>
   );
 }
 
 export function TableShell({ children, testId }) {
   return (
-    <div className="rounded-xl border bg-white overflow-x-auto">
-      <table className="w-full text-sm" data-testid={testId}>{children}</table>
+    <div className="w-full bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+      <div className="overflow-x-auto w-full">
+        <table className="w-full text-[11px] text-left" data-testid={testId}>{children}</table>
+      </div>
     </div>
   );
 }
