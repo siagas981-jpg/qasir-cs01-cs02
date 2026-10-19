@@ -18,6 +18,17 @@ const asArray = (raw) => {
   return [];
 };
 
+// --- KOMPONEN BARU BIAR RP SEJAJAR 100% ---
+const fmtNum = (n) => new Intl.NumberFormat('id-ID').format(Number(n) || 0);
+function Money({ value, bold = false, color = "text-slate-900" }) {
+  return (
+    <span className={`inline-flex w-full justify-end items-baseline gap-1 tabular-nums ${bold ? "font-bold" : ""} ${color}`}>
+      <span className="text-[10px] font-normal text-slate-400">Rp</span>
+      <span className="min-w-[78px] text-right">{fmtNum(value)}</span>
+    </span>
+  );
+}
+
 function SearchBox({ value, onChange, placeholder, testId }) {
   return (
     <div className="relative">
@@ -94,16 +105,22 @@ function SalesReport({ outletId }) {
         <div className="ml-auto"><ExportButtons onExcel={onExcel} onPDF={onPDF} idPrefix="sales" /></div>
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
-        <StatCard label="Total Penjualan" value={rupiah(total)} accent="emerald" testId="sales-total" />
+        <div className="rounded-lg border bg-gradient-to-b from-emerald-50 to-white border-emerald-200 px-3 py-2.5">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-emerald-700/70 text-left">TOTAL PENJUALAN</p>
+          <p className="text-left"><Money value={total} bold color="text-emerald-700 text-[16px]" /></p>
+        </div>
         <StatCard label="Jumlah Transaksi" value={rows.length} accent="sky" />
-        <StatCard label="Rata-rata / Transaksi" value={rupiah(rows.length ? total / rows.length : 0)} accent="slate" />
+        <div className="rounded-lg border bg-gradient-to-b from-slate-50 to-white border-slate-200 px-3 py-2.5">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 text-left">RATA-RATA / TRANSAKSI</p>
+          <p className="text-left"><Money value={rows.length ? total / rows.length : 0} color="text-slate-900 text-[16px]" /></p>
+        </div>
       </div>
       <div className="rounded-xl border bg-white p-4">
         <p className="text-[11px] font-bold mb-3 uppercase tracking-wider text-slate-500">Penjualan per Bulan (6 bulan terakhir)</p>
         <div className="h-64"><ResponsiveContainer width="100%" height="100%"><BarChart data={series}><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#eef2f7" /><XAxis dataKey="label" tick={{ fontSize: 11 }} /><YAxis tickFormatter={formatShort} tick={{ fontSize: 11 }} width={48} /><Tooltip formatter={(v) => rupiah(v)} cursor={{ fill: "rgba(16,185,129,0.08)" }} /><Bar dataKey="total" fill="#10b981" radius={[6, 6, 0, 0]} /></BarChart></ResponsiveContainer></div>
       </div>
       <TableShell testId="sales-report-table">
-        <colgroup><col style={{width:"25%"}}/><col style={{width:"15%"}}/><col style={{width:"20%"}}/><col style={{width:"20%"}}/><col style={{width:"20%"}}/></colgroup>
+        <colgroup><col style={{width:"22%"}}/><col style={{width:"13%"}}/><col style={{width:"22%"}}/><col style={{width:"22%"}}/><col style={{width:"21%"}}/></colgroup>
         <thead><tr className="border-b bg-slate-50/80 text-left text-[10px] uppercase tracking-wider text-slate-500">
           <th className="py-2.5 px-3 text-left font-bold">Tanggal</th><th className="py-2.5 px-3 text-left font-bold">Nota</th><th className="py-2.5 px-3 text-right font-bold">Total</th><th className="py-2.5 px-3 text-right font-bold">Bayar</th><th className="py-2.5 px-3 text-right font-bold">Kembali</th>
         </tr></thead>
@@ -111,7 +128,11 @@ function SalesReport({ outletId }) {
           {isLoading && <tr><td className="py-6 px-3 text-slate-500" colSpan={5}>Memuat…</td></tr>}
           {!isLoading && rows.length === 0 && <tr><td className="py-10 text-center text-slate-500 text-[11px]" colSpan={5}>Tidak ada penjualan pada periode ini.</td></tr>}
           {rows.map((r) => (<tr key={r.id} className="border-b last:border-b-0 hover:bg-slate-50/70">
-            <td className="py-2.5 px-3 text-left whitespace-nowrap text-slate-500">{dateTime(r.created_at)}</td><td className="py-2.5 px-3 text-left font-mono">{shortId(r.id)}</td><td className="py-2.5 px-3 text-right font-mono font-bold text-emerald-700">{rupiah(r.total)}</td><td className="py-2.5 px-3 text-right font-mono">{rupiah(r.paid)}</td><td className="py-2.5 px-3 text-right font-mono text-slate-500">{rupiah(r.change)}</td>
+            <td className="py-2.5 px-3 text-left whitespace-nowrap text-slate-500 text-[11px]">{dateTime(r.created_at)}</td>
+            <td className="py-2.5 px-3 text-left font-mono text-[11px]">{shortId(r.id)}</td>
+            <td className="py-2.5 px-3 text-right"><Money value={r.total} bold color="text-emerald-700" /></td>
+            <td className="py-2.5 px-3 text-right"><Money value={r.paid} color="text-slate-700" /></td>
+            <td className="py-2.5 px-3 text-right"><Money value={r.change} color="text-slate-500" /></td>
           </tr>))}
         </tbody>
       </TableShell>
@@ -135,9 +156,12 @@ function PurchaseReport({ outletId }) {
         <RangeBar range={range} showPresets={true}><SearchBox value={q} onChange={setQ} placeholder="Cari produk…" testId="purchase-search" /></RangeBar>
         <div className="ml-auto flex gap-2"><ExportButtons onExcel={onExcel} onPDF={onPDF} idPrefix="purchase" /></div>
       </div>
-      <div className="rounded-lg border bg-gradient-to-b from-amber-50 to-white border-amber-200 px-3 py-2.5"><p className="text-[10px] font-semibold uppercase tracking-wider text-amber-700/70 text-left">TOTAL PEMBELIAN</p><p className="text-[16px] font-extrabold font-mono text-amber-700 text-left">{rupiah(total)}</p></div>
+      <div className="rounded-lg border bg-gradient-to-b from-amber-50 to-white border-amber-200 px-3 py-2.5">
+        <p className="text-[10px] font-semibold uppercase tracking-wider text-amber-700/70 text-left">TOTAL PEMBELIAN</p>
+        <p className="text-left"><Money value={total} bold color="text-amber-700 text-[16px]" /></p>
+      </div>
       <TableShell testId="purchase-report-table">
-        <colgroup><col style={{width:"16%"}}/><col style={{width:"22%"}}/><col style={{width:"8%"}}/><col style={{width:"16%"}}/><col style={{width:"18%"}}/><col style={{width:"20%"}}/></colgroup>
+        <colgroup><col style={{width:"16%"}}/><col style={{width:"22%"}}/><col style={{width:"8%"}}/><col style={{width:"17%"}}/><col style={{width:"17%"}}/><col style={{width:"20%"}}/></colgroup>
         <thead><tr className="border-b bg-slate-50/80 text-[10px] uppercase tracking-wider text-slate-500">
           <th className="py-2.5 px-3 text-left font-bold">TANGGAL</th><th className="py-2.5 px-3 text-left font-bold">PRODUK</th><th className="py-2.5 px-3 text-left font-bold">QTY</th><th className="py-2.5 px-3 text-right font-bold">MODAL</th><th className="py-2.5 px-3 text-right font-bold">NILAI</th><th className="py-2.5 px-3 text-left font-bold">CATATAN</th>
         </tr></thead>
@@ -148,9 +172,9 @@ function PurchaseReport({ outletId }) {
             <tr key={r.id} className="border-b last:border-b-0 hover:bg-slate-50/70">
               <td className="py-2.5 px-3 text-left whitespace-nowrap text-slate-500 text-[11px]">{dateTime(r.created_at)}</td>
               <td className="py-2.5 px-3 text-left font-semibold text-slate-900">{r.name}</td>
-              <td className="py-2.5 px-3 text-left font-mono text-emerald-600 font-bold">+{r.quantity}</td>
-              <td className="py-2.5 px-3 text-right font-mono text-slate-500">{rupiah(r.cost_price)}</td>
-              <td className="py-2.5 px-3 text-right font-mono font-bold text-slate-900">{rupiah(r.nilai)}</td>
+              <td className="py-2.5 px-3 text-left font-mono text-emerald-600 font-bold tabular-nums">+{r.quantity}</td>
+              <td className="py-2.5 px-3 text-right font-mono text-[11px]"><Money value={r.cost_price} color="text-slate-500" /></td>
+              <td className="py-2.5 px-3 text-right font-mono text-[11px]"><Money value={r.nilai} bold color="text-slate-900" /></td>
               <td className="py-2.5 px-3 text-left text-slate-600">{r.notes || "—"}</td>
             </tr>
           ))}
