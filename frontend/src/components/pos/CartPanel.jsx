@@ -29,7 +29,7 @@ function CartLine({ item, max, setQty, remove }) {
 
 export function CartPanel({ cart, stockOf, onCheckout, disabled }) {
   return (
-    <div className="flex flex-col h-full gap-1" data-testid="cart-panel">
+    <div className="flex flex-col gap-2" data-testid="cart-panel">
       {/* HEADER MINI */}
       <div className="flex items-center justify-between pb-1 border-b leading-none">
         <h2 className="font-bold text-[11px] flex items-center gap-1"><ShoppingBag className="h-3 w-3" /> Keranjang ({cart.count})</h2>
@@ -38,13 +38,18 @@ export function CartPanel({ cart, stockOf, onCheckout, disabled }) {
         )}
       </div>
       
-      <SaldoShiftCard />
+      {/* GRID LACI - 3 KOLOM SEDANG ENAK DIPANDANG */}
+      <div className="[&>div>div:last-child]:!grid-cols-3 [&>div>div:last-child]:!gap-2">
+        <SaldoShiftCard />
+      </div>
+      
+      {/* TOTAL FLOATING - TETAP ADA BAGUS */}
       <Laci5InfoKasir />
 
-      {/* LIST - INI KUNCI BIAR MUAT */}
-      <div className="flex-1 overflow-y-auto min-h-[60px] max-h-[22vh]">
+      {/* LIST - HAPUS flex-1 & max-h BIAR GA DORONG BAYAR JAUH */}
+      <div className="overflow-y-auto">
       {cart.items.length === 0? (
-          <div className="h-full grid place-items-center text-center py-4">
+          <div className="text-center py-2">
             <p className="text-[10px] text-slate-400">Ketuk produk untuk menambah.</p>
           </div>
         ) : cart.items.map((i) => (
@@ -52,8 +57,8 @@ export function CartPanel({ cart, stockOf, onCheckout, disabled }) {
         ))}
       </div>
 
-      {/* TOTAL + BAYAR MINI */}
-      <div className="pt-2 border-t space-y-1.5 mt-auto">
+      {/* TOTAL + BAYAR - NEMPEL LANGSUNG DIBAWAH GRID + LIST, AUTO TURUN KALAU GRID NAMBAH */}
+      <div className="pt-2 border-t space-y-1.5">
         <div className="flex items-center justify-between leading-none">
           <span className="text-[9px] font-bold uppercase text-slate-400">Total {cart.count} item</span>
           <span className="font-mono text-[14px] font-black text-emerald-700">{rupiah(cart.total)}</span>
