@@ -52,8 +52,10 @@ function EmployeeForm({ initial, outlets, busy, onSubmit, isEdit }) {
           <Select value={f.role} onValueChange={(v) => set("role", v)}>
             <SelectTrigger className="bg-white" data-testid="employee-form-role-select"><SelectValue /></SelectTrigger>
             <SelectContent className="backdrop-blur-xl bg-background/95">
-              <SelectItem value="cashier">Cashier</SelectItem>
-              <SelectItem value="manager">Manager</SelectItem>
+              <SelectItem value="cashier">Cashier / Kasir</SelectItem>
+<SelectItem value="warehouse">Gudang / Warehouse</SelectItem>
+<SelectItem value="admin_toko">Admin Toko</SelectItem>
+<SelectItem value="manager">Manager</SelectItem>
             </SelectContent>
           </Select>
         </Field>
