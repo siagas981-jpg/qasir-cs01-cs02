@@ -4,17 +4,33 @@ import { useAuth } from "@/context/AuthContext";
 
 export function usePermission(key) {
   const { profile } = useAuth();
-  const [allowed, setAllowed] = useState(true);
+  const [allowed, setAllowed] = useState(false); // <-- DEFAULT FALSE SEKARANG
+
   useEffect(() => {
     if (!profile?.role) return;
     const roleLower = String(profile.role).toLowerCase();
-    if (roleLower === 'owner') { setAllowed(true); return; }
+    if (roleLower === 'owner') {
+      setAllowed(true);
+      return;
+    }
     (async () => {
-      const { data } = await supabase.from("role_permissions").select("role, allowed").eq("permission_key", key);
+      const { data, error } = await supabase
+        .from("role_permissions")
+        .select("role, allowed")
+        .eq("permission_key", key);
+      
+      if (error) {
+        console.error("Permission error:", error);
+        return;
+      }
+      
       const match = data?.find(r => String(r.role).toLowerCase() === roleLower);
-      if (match) setAllowed(!!match.allowed);
-      else setAllowed(true);
+      if (match) {
+        console.log(`[CEK HAK AKSES] ${roleLower} - ${key} = ${match.allowed}`);
+        setAllowed(!!match.allowed);
+      }
     })();
   }, [profile?.role, key]);
+
   return allowed;
 }
