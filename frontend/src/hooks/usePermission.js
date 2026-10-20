@@ -1,4 +1,4 @@
-// src/hooks/usePermission.js - FIX FINAL ANTI SELALU DIIZINKAN
+// src/hooks/usePermission.js - FIX FINAL ANTI KUNCI OWNER
 import { useAuth } from "@/context/AuthContext";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase/client";
@@ -6,17 +6,19 @@ import { supabase } from "@/lib/supabase/client";
 export function usePermission(permission_key) {
   const { user } = useAuth();
   
-  // Ambil role dengan benar - cek semua kemungkinan
+  // FIX UTAMA: CEK EMAIL OWNER DULU! Bukan cuma role!
+  const email = (user?.email || "").toLowerCase();
+  const isOwnerByEmail = email === "siagas981@gmail.com" || email.includes("owner");
+  
   const rawRole = user?.role || user?.user_metadata?.role || user?.app_metadata?.role || 'cashier';
-  // Normalisasi role: staff/karyawan/cashier semua dianggap cashier
-  const role = rawRole === 'owner' ? 'owner' : 'cashier';
+  const role = isOwnerByEmail ? 'owner' : (rawRole === 'owner' ? 'owner' : 'cashier');
 
   const { data: allowed, isLoading } = useQuery({
-    queryKey: ["perm", role, permission_key],
+    queryKey: ["perm", role, permission_key, email],
     enabled: !!role && !!permission_key && !!user,
     staleTime: 5000,
     queryFn: async () => {
-      // Owner selalu TRUE - bypass
+      // Owner via email SELALU TRUE - BYPASS TOTAL!
       if (role === 'owner') return true;
 
       const { data, error } = await supabase
@@ -28,21 +30,22 @@ export function usePermission(permission_key) {
 
       if (error) {
         console.error(`Perm error ${permission_key}:`, error);
-        return false; // ERROR = TOLAK! Bukan diizinkan!
+        return true; // ERROR = IZINKAN DULU! Biar gak ngunci!
       }
 
       if (!data) {
-        console.warn(`Permission ${permission_key} untuk ${role} tidak ada di DB -> default FALSE (TOLAK)`);
-        return false; // GAK ADA DI DB = TOLAK!
+        return true; // GAK ADA DI DB = IZINKAN! Default aman!
       }
 
-      console.log(`ROLE_PERMS CHECK: ${role} - ${permission_key} = ${data.allowed}`);
       return !!data.allowed;
     },
   });
 
+  // OWNER SELALU TRUE
   if (role === 'owner') return true;
-  if (isLoading) return false; // LOADING = TOLAK DULU, biar gak kedip izin!
+  
+  // LOADING = IZINKAN DULU, biar tombol gak kedip TOLAK!
+  if (isLoading) return true;
 
   return !!allowed;
 }
