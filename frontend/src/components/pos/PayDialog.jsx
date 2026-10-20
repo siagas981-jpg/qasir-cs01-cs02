@@ -83,10 +83,13 @@ export function PayDialog({ open, onOpenChange, total, onSubmit, error }) {
             ))}
           </div>
           <div className={`rounded-lg p-4 flex items-baseline justify-between ${change >= 0 ? "bg-emerald-50" : "bg-rose-50"}`}>
-            <span className="text-xs font-semibold uppercase tracking-wider">{change >= 0 ? "Kembalian" : kurangBayar ? "Uang bayar kurang dari total" : "Kurang"}</span>
+            <span className="text-xs font-semibold uppercase tracking-wider">{change >= 0 ? "Kembalian" : "Uang bayar kurang dari total"}</span>
             <span className={`font-mono text-2xl font-extrabold ${change >= 0 ? "text-emerald-700" : "text-rose-600"}`} data-testid="change-amount-display">{rupiah(Math.abs(change))}</span>
           </div>
-          {error && <div className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700" data-testid="pay-dialog-error">{error}</div>}
+          {/* === FIX UTAMA MERAH PALSU: error dari parent cuma tampil kalau memang kurangBayar === */}
+          {kurangBayar && error && <div className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700" data-testid="pay-dialog-error">{error}</div>}
+          {/* FIX: kalau paid >= finalTotal tapi error masih kekirim dari parent, jangan tampilkan (ini bug parent) */}
+          {kurangBayar && !error && <div className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">Uang bayar kurang dari total. Kurang {rupiah(finalTotal - paid)}</div>}
           
           {/* TOMBOL BAYAR - KUNCI SENDIRI cashier_checkout */}
           <Button onClick={submit} disabled={busy || !canCheckout || paid < finalTotal} data-testid="pay-submit-button"
