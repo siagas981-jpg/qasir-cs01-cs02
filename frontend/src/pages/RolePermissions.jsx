@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { supabase } from '../lib/supabaseClient' // <-- kalau error, ganti jadi '../supabaseClient' atau cek di App.js kamu import supabase dari mana
+import { supabase } from "@/lib/supabaseClient"
 
 const OUTLETS = [
   { id: '87aab4db-13a9-4fed-b00c-495bfdb46965', name: 'CS01 - Diskon ON' },
@@ -9,7 +9,7 @@ const OUTLETS = [
 const PERMISSIONS = [
   { key: 'cashier_checkout', label: 'Bisa Checkout' },
   { key: 'cashier_delete_item', label: 'Bisa Hapus Item' },
-  { key: 'cashier_discount', label: 'Bisa Diskon (Khusus ini)' },
+  { key: 'cashier_discount', label: 'Bisa Diskon' },
   { key: 'cashier_void', label: 'Bisa Void' },
   { key: 'pembukuan_bank', label: 'Pembukuan Bank' },
   { key: 'pembukuan_laci', label: 'Pembukuan Laci' },
@@ -24,11 +24,7 @@ export default function RolePermissions() {
   useEffect(() => {
     const load = async () => {
       setLoading(true)
-      const { data } = await supabase
-        .from('role_permissions')
-        .select('permission_key, allowed')
-        .eq('role', 'cashier')
-        .eq('outlet_id', outletId)
+      const { data } = await supabase.from('role_permissions').select('permission_key, allowed').eq('role', 'cashier').eq('outlet_id', outletId)
       const map = {}
       data?.forEach(d => map[d.permission_key] = d.allowed)
       setPerms(map)
@@ -40,12 +36,7 @@ export default function RolePermissions() {
   const toggle = async (key) => {
     const newVal = !perms[key]
     setPerms(p => ({ ...p, [key]: newVal }))
-    await supabase.from('role_permissions').upsert({
-      role: 'cashier',
-      outlet_id: outletId,
-      permission_key: key,
-      allowed: newVal
-    }, { onConflict: 'role,permission_key,outlet_id' })
+    await supabase.from('role_permissions').upsert({ role: 'cashier', outlet_id: outletId, permission_key: key, allowed: newVal }, { onConflict: 'role,permission_key,outlet_id' })
   }
 
   return (
