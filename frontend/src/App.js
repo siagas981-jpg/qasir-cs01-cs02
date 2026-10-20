@@ -1,4 +1,3 @@
-import RolePermissions from './pages/RolePermissions';
 import AccessControl from "@/components/admin/AccessControl";
 import "@/App.css";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
@@ -19,6 +18,7 @@ import Outlets from "@/pages/Outlets";
 import Employees from "@/pages/Employees";
 import Archive from "./pages/Archive";
 import ResetPassword from "@/pages/ResetPassword";
+import RolePermissions from "@/pages/RolePermissions";
 
 const Owner = ({ children }) => <RouteGuard ownerOnly>{children}</RouteGuard>;
 
@@ -37,12 +37,12 @@ function App() {
             <Route path="reports" element={<Owner><Reports /></Owner>} />
             <Route path="bookkeeping" element={<Owner><Bookkeeping /></Owner>} />
             <Route path="dashboard/suppliers" element={<Owner><Suppliers /></Owner>} />
-            <Route path="/settings/roles" element={<RolePermissions />} />
             <Route path="dashboard/purchases" element={<Owner><Purchases /></Owner>} />
             <Route path="outlets" element={<Owner><Outlets /></Owner>} />
             <Route path="employees" element={<Owner><Employees /></Owner>} />
             <Route path="dashboard/arsip" element={<Owner><Archive /></Owner>} />
-          <Route path="owner/akses" element={<Owner><AccessControl /></Owner>} />
+            <Route path="owner/akses" element={<Owner><AccessControl /></Owner>} />
+            <Route path="settings/roles" element={<Owner><RolePermissions /></Owner>} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
