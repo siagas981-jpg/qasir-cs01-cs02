@@ -1,4 +1,4 @@
-// src/components/admin/AccessControl.jsx - FIX FINAL ANTI BLOCK OWNER
+// src/components/admin/AccessControl.jsx - FIX FINAL ANTI BLOCK
 import { useState, useEffect } from "react";
 import { Switch } from "@/components/ui/switch";
 import { supabase } from "@/lib/supabase/client";
@@ -22,15 +22,10 @@ export default function AccessControl() {
   const load = async () => {
     setLoading(true);
     const { data, error } = await supabase.from('role_permissions').select('role, permission_key, allowed').eq('role','cashier');
-    console.log("LOAD DATA:", data, "ERROR:", error);
     const map = { cashier: {} };
-    Object.values(ALL_PERMS).forEach(p => map.cashier[p] = false);
+    // FIX: DEFAULT SEMUA TRUE! Biar gak ngunci!
+    Object.values(ALL_PERMS).forEach(p => map.cashier[p] = true);
     (data || []).forEach(row => { map.cashier[row.permission_key] = !!row.allowed; });
-    if (!data || data.length === 0) {
-      Object.values(ALL_PERMS).forEach(p => map.cashier[p] = true);
-      map.cashier['cashier_discount'] = false;
-      map.cashier['pembukuan_bank'] = false; // default kasir gak boleh bank
-    }
     setConfig(map);
     setLoading(false);
   };
@@ -51,11 +46,10 @@ export default function AccessControl() {
       }));
       const { error } = await supabase.from('role_permissions').upsert(rowsToSave, { onConflict: 'role,permission_key' });
       if (error) throw error;
-      toast.success("✅ Berhasil disimpan! Kasir akan ikut aturan baru");
+      toast.success("✅ Berhasil disimpan!");
       await load();
     } catch (e) {
-      console.error("SAVE ERROR:", e);
-      toast.error("Gagal simpan: " + e.message);
+      toast.error("Gagal simpan: " + e.message + " - RUN SQL DROP TABLE dulu!");
     }
     setSaving(false);
   };
@@ -67,23 +61,21 @@ export default function AccessControl() {
       <div className="text-left">
         <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-emerald-700">OWNER - siagas981@gmail.com FULL ACCESS</p>
         <h1 className="text-[22px] font-extrabold tracking-tight">Kontrol Akses Kasir</h1>
-        <p className="text-[11px] text-slate-500 mt-0.5">Owner selalu full akses (POS.jsx sudah di-fix). Ini untuk atur hak kasir saja.</p>
       </div>
       <div className="rounded-xl border bg-white p-4 shadow-sm">
-        <p className="font-extrabold uppercase text-[12px] mb-3 tracking-wider">CASHIER - {Object.values(config.cashier || {}).filter(Boolean).length} AKTIF</p>
+        <p className="font-extrabold uppercase text-[12px] mb-3">CASHIER - {Object.values(config.cashier || {}).filter(Boolean).length} AKTIF</p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
           {Object.entries(ALL_PERMS).map(([label, perm]) => (
-            <label key={perm} className="flex items-center justify-between text-[11px] border border-slate-100 rounded-lg px-3 py-2.5 hover:bg-slate-50 cursor-pointer">
-              <span className="font-medium">{label.toLowerCase()} <span className="text-[9px] text-slate-400">{perm}</span></span>
+            <label key={perm} className="flex items-center justify-between text-[11px] border rounded-lg px-3 py-2.5 cursor-pointer">
+              <span>{label} <span className="text-[9px] text-slate-400">{perm}</span></span>
               <Switch checked={!!config.cashier?.[perm]} onCheckedChange={() => toggle('cashier', perm)} />
             </label>
           ))}
         </div>
       </div>
-      <button onClick={save} disabled={saving} className="bg-slate-900 text-white px-6 py-2.5 rounded-xl text-[12px] font-bold w-full md:w-auto">
+      <button onClick={save} disabled={saving} className="bg-slate-900 text-white px-6 py-2.5 rounded-xl text-[12px] font-bold w-full">
         {saving ? "Menyimpan..." : "Simpan Akses Global"}
       </button>
-      <p className="text-[10px] text-slate-400">Catatan: pembukuan_bank OFF = kasir gak lihat Transaksi Bank. Owner tetap bisa karena fix di POS.jsx</p>
     </div>
   );
 }
