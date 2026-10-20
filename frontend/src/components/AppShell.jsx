@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, Component } from "react";
 import { NavLink, Outlet } from "react-router-dom";
-import { LogOut, Store, Users, Boxes, BarChart3, BookOpen, Truck, ShoppingCart, Archive } from "lucide-react";
+import { LogOut, Store, Users, Boxes, BarChart3, BookOpen, Truck, ShoppingCart, Archive, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
 import { useConnection } from "@/hooks/useConnection";
@@ -20,6 +20,7 @@ const NAV = [
   { to: "/outlets", label: "Outlet", id: "nav-outlets", owner: true },
   { to: "/employees", label: "Kelola Karyawan", id: "nav-employees", owner: true, icon: Users },
   { to: "/dashboard/arsip", label: "Arsip", id: "nav-archive", owner: true, icon: Archive },
+  { to: "/owner/akses", label: "Akses", id: "nav-akses", owner: true, icon: ShieldCheck },
 ];
 
 // ERROR BOUNDARY ANTI LAYAR PUTIH
