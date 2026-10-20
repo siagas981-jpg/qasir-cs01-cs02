@@ -16,7 +16,6 @@ const isNetworkError = (e) => {
   return !e.code || /fetch|network|load failed|not found/i.test(e.message || "");
 };
 
-// FIX: tambah p_discount biar backend tau!
 export async function runCheckout({ outlet_id, items, paid, discount = 0, client_ref }) {
   try {
     if (!outlet_id || !items) {
@@ -27,7 +26,7 @@ export async function runCheckout({ outlet_id, items, paid, discount = 0, client
       p_outlet_id: outlet_id,
       p_items: items.map((i) => ({ product_id: i.product_id, qty: i.qty })),
       p_paid: paid,
-      p_discount: discount, // <-- FIX KIRIM DISKON!
+      p_discount: discount,
       p_client_ref: client_ref,
     });
     
