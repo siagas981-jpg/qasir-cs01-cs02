@@ -85,24 +85,46 @@ export default function POS() {
     if (!numberString) return "";
     return parseInt(numberString, 10).toLocaleString("id-ID");
   };
-  const unformatRupiah = (formatted) => {
-    if (!formatted) return 0;
-    return Number(String(formatted).replace(/\./g, "").replace(/[^0-9]/g, "")) || 0;
+    const submit = async (paid, client_ref, discount = 0) => {
+    setPayError("");
+    const finalTotal = Math.max(0, cart.total - (discount || 0));
+    
+    // VALIDASI FRONTEND BIAR GAK MERAH PALSU
+    if (paid < finalTotal) {
+      setPayError(`Uang bayar kurang dari total. Kurang Rp ${(finalTotal - paid).toLocaleString("id-ID")}`);
+      return;
+    }
+
+    const payload = { 
+      outlet_id: activeOutletId, 
+      items: cart.items, 
+      paid, 
+      discount, 
+      client_ref, 
+      user_id: user.id, 
+      total: finalTotal, 
+      original_total: cart.total, 
+      created_at: new Date().toISOString() 
+    };
+    
+    const res = navigator.onLine ? await runCheckout(payload) : { ok: false, network: true };
+    
+    if (res.ok) {
+      applyStock(); cart.clear(); setPayOpen(false); setReceipt(res.data);
+      qc.invalidateQueries({ queryKey: ["products", activeOutletId] }); 
+      qc.invalidateQueries({ queryKey: ["transactions"] }); 
+      return;
+    }
+    if (res.network) {
+      enqueue(payload); applyStock(); cart.clear(); setPayOpen(false);
+      setReceipt({ queued: true, total: payload.total, paid, change: paid - payload.total }); 
+      return;
+    }
+    const detail = res.short?.map((s) => `${s.name}: diminta ${s.requested}, tersisa ${s.available}`).join(" · ");
+    setPayError(detail ? `${res.message}. ${detail}` : res.message); 
+    toast.error(res.message);
+    qc.invalidateQueries({ queryKey: ["products", activeOutletId] });
   };
-
-  const [bankLaciId, setBankLaciId] = useState("");
-  const [bankTipe, setBankTipe] = useState("masuk");
-  const [bankJumlah, setBankJumlah] = useState("");
-  const [bankKet, setBankKet] = useState("");
-  const [bankLoading, setBankLoading] = useState(false);
-
-  const inCart = Object.fromEntries(cart.items.map((i) => [i.product_id, i.qty]));
-  const stockOf = (id) => products.find((p) => p.id === id)?.stock?? 0;
-  const filteredProducts = products.filter(p=>{
-    if(filterCat!=="all" && p.category_id!==filterCat) return false;
-    if(filterBrand!=="all" && p.brand_id!==filterBrand) return false;
-    if(filterColl!=="all" && p.collection_id!==filterColl) return false;
-    return true;
   });
   const applyStock = () => qc.setQueryData(key, (old = []) => old.map((p) => ({...p, stock: p.stock - (inCart[p.id] || 0) })));
 
