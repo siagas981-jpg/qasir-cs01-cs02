@@ -38,7 +38,7 @@ export function usePermission(permission_key) {
   const { data: allowed, isLoading, error } = useQuery({
     queryKey: ["perm", role, permission_key, outletId, email],
     enabled: !!permission_key && !!user && !!email,
-    staleTime: 1000 * 60 * 5, // cache 5 menit
+    staleTime: 0, // biar langsung sinkron!
     retry: 1,
     queryFn: async () => {
       // OWNER SELALU TRUE - BYPASS TOTAL, GAK USAH QUERY!
