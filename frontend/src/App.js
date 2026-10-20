@@ -1,3 +1,4 @@
+import RolePermissions from './pages/RolePermissions';
 import AccessControl from "@/components/admin/AccessControl";
 import "@/App.css";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
@@ -36,6 +37,7 @@ function App() {
             <Route path="reports" element={<Owner><Reports /></Owner>} />
             <Route path="bookkeeping" element={<Owner><Bookkeeping /></Owner>} />
             <Route path="dashboard/suppliers" element={<Owner><Suppliers /></Owner>} />
+            <Route path="/settings/roles" element={<RolePermissions />} />
             <Route path="dashboard/purchases" element={<Owner><Purchases /></Owner>} />
             <Route path="outlets" element={<Owner><Outlets /></Owner>} />
             <Route path="employees" element={<Owner><Employees /></Owner>} />
