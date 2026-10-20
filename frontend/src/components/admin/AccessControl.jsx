@@ -69,8 +69,9 @@ export default function AccessControl() {
     setLoading(false);
   };
 
-  useEffect(() => { 
+    useEffect(() => { 
     load(); 
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [outletId]);
 
   const toggle = (role, perm) => {
