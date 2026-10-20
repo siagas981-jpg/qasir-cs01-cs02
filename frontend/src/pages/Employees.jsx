@@ -15,9 +15,18 @@ import { useAuth } from "@/context/AuthContext";
 const ROLE_STYLE = {
   owner: "bg-slate-900 text-white",
   admin: "bg-slate-900 text-white",
+  admin_toko: "bg-purple-100 text-purple-800",
   manager: "bg-sky-100 text-sky-800",
+  warehouse: "bg-amber-100 text-amber-800",
   cashier: "bg-emerald-100 text-emerald-800",
 };
+
+const ROLE_OPTIONS = [
+  { value: "cashier", label: "Cashier / Kasir" },
+  { value: "warehouse", label: "Warehouse / Gudang" },
+  { value: "admin_toko", label: "Admin Toko" },
+  { value: "owner", label: "Owner" },
+];
 
 function Field({ label, children }) {
   return <div className="space-y-1.5"><Label>{label}</Label>{children}</div>;
@@ -223,7 +232,9 @@ export default function Employees() {
             <SelectItem value="all">Semua role</SelectItem>
             <SelectItem value="owner">Owner</SelectItem>
             <SelectItem value="manager">Manager</SelectItem>
-            <SelectItem value="cashier">Cashier</SelectItem>
+            <SelectItem value="cashier">CASHIER / KASIR</SelectItem>
+<SelectItem value="warehouse">WAREHOUSE / GUDANG</SelectItem>
+<SelectItem value="admin_toko">ADMIN TOKO</SelectItem>
           </SelectContent>
         </Select>
         <Select value={outletFilter} onValueChange={setOutletFilter}>
