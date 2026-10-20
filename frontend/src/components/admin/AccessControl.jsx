@@ -1,4 +1,4 @@
-// src/components/admin/AccessControl.jsx - FIX FINAL ANTI BALIK ON
+// src/components/admin/AccessControl.jsx - FIX LENGKAP 100% MUNCUL + ANTI BALIK
 import { useState, useEffect } from "react";
 import { Switch } from "@/components/ui/switch";
 import { supabase } from "@/lib/supabase/client";
@@ -14,6 +14,8 @@ const ALL_PERMS = {
   "Pembukuan - Saldo": "pembukuan_saldo",
 };
 
+const DEFAULT_ROLES = ["cashier"];
+
 export default function AccessControl() {
   const [config, setConfig] = useState({ cashier: {} });
   const [saving, setSaving] = useState(false);
@@ -21,19 +23,34 @@ export default function AccessControl() {
 
   const load = async () => {
     setLoading(true);
-    const { data, error } = await supabase.from('role_permissions').select('role, permission_key, allowed').eq('role','cashier');
-    if (error) {
-      console.error(error);
-      toast.error("Gagal load: " + error.message);
+    try {
+      const { data, error } = await supabase.from('role_permissions').select('role, permission_key, allowed').eq('role','cashier');
+      console.log("ROLE_PERMS DATA:", data, "ERROR:", error);
+      if (error) throw error;
+      
+      const map = { cashier: {} };
+      // default OFF dulu biar jelas
+      Object.values(ALL_PERMS).forEach(p => map.cashier[p] = false);
+      
+      (data || []).forEach(row => {
+        map.cashier[row.permission_key] = !!row.allowed;
+      });
+
+      // Kalau kosong total, default ON semua kecuali diskon OFF contoh
+      if (!data || data.length === 0) {
+        toast.info("Table kosong, pakai default");
+        Object.values(ALL_PERMS).forEach(p => map.cashier[p] = true);
+        map.cashier['cashier_discount'] = false;
+      }
+
+      setConfig(map);
+    } catch (e) {
+      console.error(e);
+      toast.error("Gagal load: " + e.message);
+      const fallback = { cashier: {} };
+      Object.values(ALL_PERMS).forEach(p => fallback.cashier[p] = true);
+      setConfig(fallback);
     }
-    const map = { cashier: {} };
-    // Default semua TRUE dulu
-    Object.values(ALL_PERMS).forEach(p => map.cashier[p] = true);
-    // Timpa dengan data dari DB (termasuk yang FALSE)
-    (data || []).forEach(row => {
-      map.cashier[row.permission_key] = !!row.allowed;
-    });
-    setConfig(map);
     setLoading(false);
   };
 
@@ -49,26 +66,26 @@ export default function AccessControl() {
   const save = async () => {
     setSaving(true);
     try {
-      // FIX: Bulk upsert SEMUA, bukan satu-satu, dan pakai false eksplisit
-      const rows = Object.values(ALL_PERMS).map(perm => ({
+      // FIX FINAL: HAPUS DULU BARU INSERT = ANTI DOBEL, ON TETAP ON!
+      const rowsToSave = Object.entries(config.cashier).map(([key, val]) => ({
         role: 'cashier',
-        permission_key: perm,
-        allowed: config.cashier?.[perm] === true // true hanya kalau true, sisanya false
+        permission_key: key,
+        allowed: !!val
       }));
 
-      console.log("MAU DISIMPAN:", rows);
+      console.log("MAU DISIMPAN:", rowsToSave);
 
-      const { error } = await supabase
-        .from('role_permissions')
-        .upsert(rows, { onConflict: 'role,permission_key' });
+      const { error: delError } = await supabase.from('role_permissions').delete().eq('role','cashier');
+      if (delError) throw delError;
 
-      if (error) throw error;
+      const { error: insError } = await supabase.from('role_permissions').insert(rowsToSave);
+      if (insError) throw insError;
 
-      toast.success("✅ Akses GLOBAL berhasil! Yang OFF tetap OFF!");
-      await load(); // reload biar yakin
+      toast.success("✅ Akses GLOBAL berhasil disimpan!");
+      await load();
     } catch (e) {
+      toast.error("Gagal simpan: " + e.message);
       console.error(e);
-      toast.error("Gagal simpan: " + e.message + " - Cek RLS Supabase!");
     }
     setSaving(false);
   };
@@ -83,9 +100,15 @@ export default function AccessControl() {
         <p className="text-[11px] text-slate-500 mt-0.5">Buka-tutup hak akses karyawan — Global semua outlet</p>
       </div>
 
-      {Object.keys(config).map(role => (
+      {Object.keys(config).filter(r => r !== 'owner').length === 0 && (
+        <div className="bg-rose-50 border border-rose-200 p-4 rounded-xl text-xs text-rose-700">
+          GAK ADA ROLE TERDETEKSI! Klik Simpan untuk buat default cashier.
+        </div>
+      )}
+
+      {Object.keys(config).filter(r => r !== 'owner').map(role => (
         <div key={role} className="rounded-xl border bg-white p-4 shadow-sm">
-          <p className="font-extrabold uppercase text-[12px] mb-3 tracking-wider">{role} - {Object.values(config[role] || {}).filter(Boolean).length} aktif</p>
+          <p className="font-extrabold uppercase text-[12px] mb-3 tracking-wider">{role.replaceAll('_',' ')} - {Object.values(config[role] || {}).filter(Boolean).length} aktif</p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
             {Object.entries(ALL_PERMS).map(([label, perm]) => (
               <label key={perm} className="flex items-center justify-between text-[11px] border border-slate-100 rounded-lg px-3 py-2.5 hover:bg-slate-50 cursor-pointer">
