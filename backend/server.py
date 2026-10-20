@@ -56,7 +56,7 @@ class NewEmployee(BaseModel):
     email: str = Field(min_length=3)
     password: str = Field(min_length=6)
     full_name: Optional[str] = None
-    role: str = "cashier"
+    role: str = Field(default="cashier")
     outlet_id: str
 
 
@@ -100,7 +100,7 @@ async def health():
 
 @api.post("/employees", status_code=201)
 async def create_employee(body: NewEmployee, _owner: dict = Depends(require_owner)):
-    if body.role not in ("cashier", "manager"):
+    if body.role not in ("cashier", "manager", "warehouse", "admin_toko"):
         raise HTTPException(400, "Role harus cashier atau manager")
     if "@" not in body.email or "." not in body.email.split("@")[-1]:
         raise HTTPException(400, "Email tidak valid")
