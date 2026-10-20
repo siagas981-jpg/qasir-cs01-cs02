@@ -72,7 +72,6 @@ export default function POS() {
   const shift = useShift(activeOutletId);
   const { data: laciBank = [] } = useLaciBank(activeOutletId);
 
-  // === FIX KUNCI LACI + BAYAR + DISKON - PISAH TOTAL ===
   const canViewLaci = usePermission("pembukuan_laci");
   const canBankTx = usePermission("pembukuan_bank");
   const canCheckout = usePermission("cashier_checkout");
@@ -85,64 +84,67 @@ export default function POS() {
     if (!numberString) return "";
     return parseInt(numberString, 10).toLocaleString("id-ID");
   };
-    const submit = async (paid, client_ref, discount = 0) => {
-    setPayError("");
-    const finalTotal = Math.max(0, cart.total - (discount || 0));
-    
-    // VALIDASI FRONTEND BIAR GAK MERAH PALSU
-    if (paid < finalTotal) {
-      setPayError(`Uang bayar kurang dari total. Kurang Rp ${(finalTotal - paid).toLocaleString("id-ID")}`);
-      return;
-    }
-
-    const payload = { 
-      outlet_id: activeOutletId, 
-      items: cart.items, 
-      paid, 
-      discount, 
-      client_ref, 
-      user_id: user.id, 
-      total: finalTotal, 
-      original_total: cart.total, 
-      created_at: new Date().toISOString() 
-    };
-    
-    const res = navigator.onLine ? await runCheckout(payload) : { ok: false, network: true };
-    
-    if (res.ok) {
-      applyStock(); cart.clear(); setPayOpen(false); setReceipt(res.data);
-      qc.invalidateQueries({ queryKey: ["products", activeOutletId] }); 
-      qc.invalidateQueries({ queryKey: ["transactions"] }); 
-      return;
-    }
-    if (res.network) {
-      enqueue(payload); applyStock(); cart.clear(); setPayOpen(false);
-      setReceipt({ queued: true, total: payload.total, paid, change: paid - payload.total }); 
-      return;
-    }
-    const detail = res.short?.map((s) => `${s.name}: diminta ${s.requested}, tersisa ${s.available}`).join(" · ");
-    setPayError(detail ? `${res.message}. ${detail}` : res.message); 
-    toast.error(res.message);
-    qc.invalidateQueries({ queryKey: ["products", activeOutletId] });
+  const unformatRupiah = (formatted) => {
+    if (!formatted) return 0;
+    return Number(String(formatted).replace(/\./g, "").replace(/[^0-9]/g, "")) || 0;
   };
+
+  const [bankLaciId, setBankLaciId] = useState("");
+  const [bankTipe, setBankTipe] = useState("masuk");
+  const [bankJumlah, setBankJumlah] = useState("");
+  const [bankKet, setBankKet] = useState("");
+  const [bankLoading, setBankLoading] = useState(false);
+
+  const inCart = Object.fromEntries(cart.items.map((i) => [i.product_id, i.qty]));
+  const stockOf = (id) => products.find((p) => p.id === id)?.stock ?? 0;
+  const filteredProducts = products.filter(p=>{
+    if(filterCat!=="all" && p.category_id!==filterCat) return false;
+    if(filterBrand!=="all" && p.brand_id!==filterBrand) return false;
+    if(filterColl!=="all" && p.collection_id!==filterColl) return false;
+    return true;
   });
   const applyStock = () => qc.setQueryData(key, (old = []) => old.map((p) => ({...p, stock: p.stock - (inCart[p.id] || 0) })));
 
   const submit = async (paid, client_ref, discount = 0) => {
     setPayError("");
-    const finalTotal = Math.max(0, cart.total - discount);
-    const payload = { outlet_id: activeOutletId, items: cart.items, paid, client_ref, user_id: user.id, total: finalTotal, discount, original_total: cart.total, created_at: new Date().toISOString() };
-    const res = navigator.onLine? await runCheckout(payload) : { ok: false, network: true };
+    const d = Number(discount) || 0;
+    const finalTotal = Math.max(0, cart.total - d);
+    if (paid < finalTotal) {
+      setPayError("Uang bayar kurang dari total. Kurang Rp " + (finalTotal - paid).toLocaleString("id-ID"));
+      return;
+    }
+    const payload = {
+      outlet_id: activeOutletId,
+      items: cart.items,
+      paid: paid,
+      discount: d,
+      client_ref: client_ref,
+      user_id: user.id,
+      total: finalTotal,
+      original_total: cart.total,
+      created_at: new Date().toISOString()
+    };
+    const res = navigator.onLine ? await runCheckout(payload) : { ok: false, network: true };
     if (res.ok) {
-      applyStock(); cart.clear(); setPayOpen(false); setReceipt(res.data);
-      qc.invalidateQueries({ queryKey: ["products", activeOutletId] }); qc.invalidateQueries({ queryKey: ["transactions"] }); return;
+      applyStock();
+      cart.clear();
+      setPayOpen(false);
+      setReceipt(res.data);
+      qc.invalidateQueries({ queryKey: ["products", activeOutletId] });
+      qc.invalidateQueries({ queryKey: ["transactions"] });
+      return;
     }
     if (res.network) {
-      enqueue(payload); applyStock(); cart.clear(); setPayOpen(false);
-      setReceipt({ queued: true, total: payload.total, paid, change: paid - payload.total }); return;
+      enqueue(payload);
+      applyStock();
+      cart.clear();
+      setPayOpen(false);
+      setReceipt({ queued: true, total: payload.total, paid: paid, change: paid - payload.total });
+      return;
     }
-    const detail = res.short?.map((s) => `${s.name}: diminta ${s.requested}, tersisa ${s.available}`).join(" · ");
-    setPayError(detail? `${res.message}. ${detail}` : res.message); toast.error(res.message);
+    const detail = res.short ? res.short.map(function(s){ return s.name + ": diminta " + s.requested + ", tersisa " + s.available; }).join(" - ") : "";
+    setPayError(detail ? res.message + ". " + detail : res.message);
+    toast.error(res.message);
     qc.invalidateQueries({ queryKey: ["products", activeOutletId] });
   };
 
@@ -158,10 +160,10 @@ export default function POS() {
         kasir_email: user?.email,
         tipe: bankTipe,
         jumlah: unformatRupiah(bankJumlah),
-        keterangan: bankKet || `${bankTipe} ${laciBank.find(b=>b.id===bankLaciId)?.nama}`,
+        keterangan: bankKet || (bankTipe + " " + (laciBank.find(function(b){return b.id===bankLaciId;})?.nama || "")),
       });
       if (error) throw error;
-      toast.success(`Transaksi ${bankTipe} ${laciBank.find(b=>b.id===bankLaciId)?.nama} Rp ${bankJumlah} berhasil!`);
+      toast.success("Transaksi " + bankTipe + " " + (laciBank.find(function(b){return b.id===bankLaciId;})?.nama || "") + " Rp " + bankJumlah + " berhasil!");
       setBankJumlah(""); setBankKet(""); setBankLaciId("");
       qc.invalidateQueries({ queryKey: ["laci-bank"] });
       qc.invalidateQueries({ queryKey: ["laci"] });
@@ -192,10 +194,9 @@ export default function POS() {
         <ProductGrid products={filteredProducts} loading={isLoading} inCart={inCart} onAdd={cart.add} search={search} setSearch={setSearch} />
       </section>
       <aside className="lg:col-span-5 xl:col-span-4 bg-white border-t lg:border-t-0 lg:border-l p-4 md:p-6 lg:h-full lg:overflow-y-auto space-y-6">
-        {/* TRANSAKSI BANK - CEK PEMBUKUAN_BANK */}
         {canBankTx ? (
           <div className="rounded-xl border-2 border-emerald-200 bg-emerald-50/50 p-4 space-y-3">
-            <h3 className="font-bold text-sm text-emerald-900">🏦 Transaksi Bank (Auto Saldo Laci 5)</h3>
+            <h3 className="font-bold text-sm text-emerald-900">Transaksi Bank (Auto Saldo Laci 5)</h3>
             <div className="grid grid-cols-2 gap-2">
               <Select value={bankLaciId} onValueChange={setBankLaciId}>
                 <SelectTrigger className="h-9 bg-white"><SelectValue placeholder="Pilih Bank" /></SelectTrigger>
@@ -209,21 +210,17 @@ export default function POS() {
             <input type="text" value={formatRupiah(bankJumlah)} onChange={e=>setBankJumlah(formatRupiah(e.target.value))} placeholder="Jumlah Rp (contoh 50000)" className="w-full h-9 px-3 rounded-md border bg-white text-sm" />
             <input type="text" value={bankKet} onChange={e=>setBankKet(e.target.value)} placeholder="Keterangan (opsional)" className="w-full h-9 px-3 rounded-md border bg-white text-sm" />
             <button onClick={handleBankTx} disabled={bankLoading} className="w-full h-10 rounded-md bg-emerald-600 text-white font-bold text-sm hover:bg-emerald-700 disabled:opacity-50">
-              {bankLoading? "Menyimpan..." : `Simpan ${bankTipe.toUpperCase()} - Shift ${shift?.currentShift||""}`}
+              {bankLoading? "Menyimpan..." : "Simpan " + bankTipe.toUpperCase() + " - Shift " + (shift?.currentShift||"")}
             </button>
             <p className="text-[11px] text-emerald-800">Auto catat: {user?.email} | Shift {shift?.currentShift} | Saldo LACI_5 auto nambah/kurang</p>
           </div>
         ) : (
           <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-[11px] text-center text-slate-500">
-            🔒 Transaksi Bank hanya untuk Owner (atur di Menu Akses → pembukuan_bank)
+            Transaksi Bank hanya untuk Owner (atur di Menu Akses - pembukuan_bank)
           </div>
         )}
-
         <CartPanel cart={cart} stockOf={stockOf} canCheckout={canCheckout} canDiscount={canDiscount} onCheckout={() => { setPayError(""); setPayOpen(true); }} />
-
-        {/* LACI 5 - HANYA OWNER */}
         {canViewLaci ? <Laci5InfoKasir outletId={activeOutletId} /> : null}
-
       </aside>
       <PayDialog open={payOpen} onOpenChange={setPayOpen} total={cart.total} onSubmit={submit} error={payError} canCheckout={canCheckout} canDiscount={canDiscount} />
       <ReceiptDialog receipt={receipt} onClose={() => setReceipt(null)} />
