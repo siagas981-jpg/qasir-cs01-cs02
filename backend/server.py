@@ -347,3 +347,27 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+# === ROLE PERMISSIONS API (UNTUK KONTROL AKSES 3 ROLE) ===
+@app.get("/role-permissions")
+async def get_role_permissions(_owner: dict = Depends(require_owner)):
+    async with client() as c:
+        r = await c.get("/rest/v1/role_permissions", params={"select": "*"})
+        if r.status_code != 200:
+            raise HTTPException(400, "Gagal ambil role permissions")
+        return r.json()
+
+class UpdatePermission(BaseModel):
+    role: str
+    permission_key: str
+    is_enabled: bool
+
+@app.put("/role-permissions")
+async def update_role_permission(body: UpdatePermission, _owner: dict = Depends(require_owner)):
+    async with client() as c:
+        # update where role= and permission_key=
+        r = await c.patch("/rest/v1/role_permissions", 
+            params={"role": f"eq.{body.role}", "permission_key": f"eq.{body.permission_key}"},
+            json={"is_enabled": body.is_enabled})
+        if r.status_code not in (200, 204):
+            raise HTTPException(400, f"Gagal update: {r.text}")
+        return {"message": "Updated"}
