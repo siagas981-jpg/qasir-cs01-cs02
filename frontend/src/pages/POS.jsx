@@ -13,7 +13,8 @@ import { ReceiptDialog } from "@/components/pos/ReceiptDialog";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { useShift } from "@/hooks/useShift";
 import ShiftStartModal from "@/components/ShiftStartModal";
-import Laci5InfoKasir from "@/components/laci/Laci5InfoKasir"; // <-- TAMBAHAN OPSI 1
+import Laci5InfoKasir from "@/components/laci/Laci5InfoKasir";
+import { usePermission } from "@/hooks/usePermission"; // <-- KUNCI LACI
 
 export const fetchProducts = async (outletId) => {
   const { data, error } = await supabase.from("products").select("*").eq("outlet_id", outletId).order("name");
@@ -43,11 +44,7 @@ function useLaciBank(outletId) {
     enabled: !!outletId,
     queryFn: async () => {
       try {
-        const { data, error } = await supabase.from("laci")
-         .select("*")
-         .eq("outlet_id", outletId)
-         .ilike("kode", "LACI_5_%")
-         .order("kode");
+        const { data, error } = await supabase.from("laci").select("*").eq("outlet_id", outletId).ilike("kode", "LACI_5_%").order("kode");
         if (error) throw error;
         return data || [];
       } catch (e) {
@@ -75,17 +72,21 @@ export default function POS() {
   const shift = useShift(activeOutletId);
   const { data: laciBank = [] } = useLaciBank(activeOutletId);
 
+  // === KUNCI LACI OPSI A ===
+  const canViewLaci = usePermission("pembukuan_laci");
+  const canBankTx = usePermission("pembukuan_bank");
+
   const formatRupiah = (angka) => {
-  if (angka === "" || angka === null || angka === undefined) return "";
-  const str = String(angka);
-  const numberString = str.replace(/\D/g, "");
-  if (!numberString) return "";
-  return parseInt(numberString, 10).toLocaleString("id-ID");
-};
-const unformatRupiah = (formatted) => {
-  if (!formatted) return 0;
-  return Number(String(formatted).replace(/\./g, "").replace(/[^0-9]/g, "")) || 0;
-};
+    if (angka === "" || angka === null || angka === undefined) return "";
+    const str = String(angka);
+    const numberString = str.replace(/\D/g, "");
+    if (!numberString) return "";
+    return parseInt(numberString, 10).toLocaleString("id-ID");
+  };
+  const unformatRupiah = (formatted) => {
+    if (!formatted) return 0;
+    return Number(String(formatted).replace(/\./g, "").replace(/[^0-9]/g, "")) || 0;
+  };
 
   const [bankLaciId, setBankLaciId] = useState("");
   const [bankTipe, setBankTipe] = useState("masuk");
@@ -103,9 +104,10 @@ const unformatRupiah = (formatted) => {
   });
   const applyStock = () => qc.setQueryData(key, (old = []) => old.map((p) => ({...p, stock: p.stock - (inCart[p.id] || 0) })));
 
-  const submit = async (paid, client_ref) => {
+  const submit = async (paid, client_ref, discount = 0) => {
     setPayError("");
-    const payload = { outlet_id: activeOutletId, items: cart.items, paid, client_ref, user_id: user.id, total: cart.total, created_at: new Date().toISOString() };
+    const finalTotal = Math.max(0, cart.total - discount);
+    const payload = { outlet_id: activeOutletId, items: cart.items, paid, client_ref, user_id: user.id, total: finalTotal, discount, original_total: cart.total, created_at: new Date().toISOString() };
     const res = navigator.onLine? await runCheckout(payload) : { ok: false, network: true };
     if (res.ok) {
       applyStock(); cart.clear(); setPayOpen(false); setReceipt(res.data);
@@ -166,30 +168,37 @@ const unformatRupiah = (formatted) => {
         <ProductGrid products={filteredProducts} loading={isLoading} inCart={inCart} onAdd={cart.add} search={search} setSearch={setSearch} />
       </section>
       <aside className="lg:col-span-5 xl:col-span-4 bg-white border-t lg:border-t-0 lg:border-l p-4 md:p-6 lg:h-full lg:overflow-y-auto space-y-6">
-        <div className="rounded-xl border-2 border-emerald-200 bg-emerald-50/50 p-4 space-y-3">
-          <h3 className="font-bold text-sm text-emerald-900">🏦 Transaksi Bank (Auto Saldo Laci 5)</h3>
-          <div className="grid grid-cols-2 gap-2">
-            <Select value={bankLaciId} onValueChange={setBankLaciId}>
-              <SelectTrigger className="h-9 bg-white"><SelectValue placeholder="Pilih Bank" /></SelectTrigger>
-              <SelectContent>{laciBank.map(b=><SelectItem key={b.id} value={b.id}>{b.nama} - Rp {Number(b.saldo||0).toLocaleString()}</SelectItem>)}</SelectContent>
-            </Select>
-            <Select value={bankTipe} onValueChange={setBankTipe}>
-              <SelectTrigger className="h-9 bg-white"><SelectValue /></SelectTrigger>
-              <SelectContent><SelectItem value="masuk">Masuk (+)</SelectItem><SelectItem value="keluar">Keluar (-)</SelectItem></SelectContent>
-            </Select>
+        {/* TRANSAKSI BANK - HANYA OWNER */}
+        {canBankTx ? (
+          <div className="rounded-xl border-2 border-emerald-200 bg-emerald-50/50 p-4 space-y-3">
+            <h3 className="font-bold text-sm text-emerald-900">🏦 Transaksi Bank (Auto Saldo Laci 5)</h3>
+            <div className="grid grid-cols-2 gap-2">
+              <Select value={bankLaciId} onValueChange={setBankLaciId}>
+                <SelectTrigger className="h-9 bg-white"><SelectValue placeholder="Pilih Bank" /></SelectTrigger>
+                <SelectContent>{laciBank.map(b=><SelectItem key={b.id} value={b.id}>{b.nama} - Rp {Number(b.saldo||0).toLocaleString()}</SelectItem>)}</SelectContent>
+              </Select>
+              <Select value={bankTipe} onValueChange={setBankTipe}>
+                <SelectTrigger className="h-9 bg-white"><SelectValue /></SelectTrigger>
+                <SelectContent><SelectItem value="masuk">Masuk (+)</SelectItem><SelectItem value="keluar">Keluar (-)</SelectItem></SelectContent>
+              </Select>
+            </div>
+            <input type="text" value={formatRupiah(bankJumlah)} onChange={e=>setBankJumlah(formatRupiah(e.target.value))} placeholder="Jumlah Rp (contoh 50000)" className="w-full h-9 px-3 rounded-md border bg-white text-sm" />
+            <input type="text" value={bankKet} onChange={e=>setBankKet(e.target.value)} placeholder="Keterangan (opsional)" className="w-full h-9 px-3 rounded-md border bg-white text-sm" />
+            <button onClick={handleBankTx} disabled={bankLoading} className="w-full h-10 rounded-md bg-emerald-600 text-white font-bold text-sm hover:bg-emerald-700 disabled:opacity-50">
+              {bankLoading? "Menyimpan..." : `Simpan ${bankTipe.toUpperCase()} - Shift ${shift?.currentShift||""}`}
+            </button>
+            <p className="text-[11px] text-emerald-800">Auto catat: {user?.email} | Shift {shift?.currentShift} | Saldo LACI_5 auto nambah/kurang</p>
           </div>
-          <input type="text" value={formatRupiah(bankJumlah)} onChange={e=>setBankJumlah(formatRupiah(e.target.value))} placeholder="Jumlah Rp (contoh 50000)" className="w-full h-9 px-3 rounded-md border bg-white text-sm" />
-          <input type="text" value={bankKet} onChange={e=>setBankKet(e.target.value)} placeholder="Keterangan (opsional)" className="w-full h-9 px-3 rounded-md border bg-white text-sm" />
-          <button onClick={handleBankTx} disabled={bankLoading} className="w-full h-10 rounded-md bg-emerald-600 text-white font-bold text-sm hover:bg-emerald-700 disabled:opacity-50">
-            {bankLoading? "Menyimpan..." : `Simpan ${bankTipe.toUpperCase()} - Shift ${shift?.currentShift||""}`}
-          </button>
-          <p className="text-[11px] text-emerald-800">Auto catat: {user?.email} | Shift {shift?.currentShift} | Saldo LACI_5 auto nambah/kurang</p>
-        </div>
+        ) : (
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-[11px] text-center text-slate-500">
+            🔒 Transaksi Bank hanya untuk Owner (atur di Menu Akses → pembukuan_bank)
+          </div>
+        )}
 
         <CartPanel cart={cart} stockOf={stockOf} onCheckout={() => { setPayError(""); setPayOpen(true); }} />
 
-        {/* INI YANG BIKIN JADI 0 SAAT PILIH QASIR 02 - OPSI 1 */}
-        <Laci5InfoKasir outletId={activeOutletId} />
+        {/* LACI 5 - HANYA OWNER */}
+        {canViewLaci ? <Laci5InfoKasir outletId={activeOutletId} /> : null}
 
       </aside>
       <PayDialog open={payOpen} onOpenChange={setPayOpen} total={cart.total} onSubmit={submit} error={payError} />
