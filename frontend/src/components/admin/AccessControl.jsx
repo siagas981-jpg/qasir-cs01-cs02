@@ -1,4 +1,4 @@
-// src/components/admin/AccessControl.jsx - FIX ANTI HILANG 100% MUNCUL
+// src/components/admin/AccessControl.jsx - FIX FINAL ANTI BALIK ON
 import { useState, useEffect } from "react";
 import { Switch } from "@/components/ui/switch";
 import { supabase } from "@/lib/supabase/client";
@@ -14,59 +14,30 @@ const ALL_PERMS = {
   "Pembukuan - Saldo": "pembukuan_saldo",
 };
 
-const DEFAULT_ROLES = ["cashier"]; // role yang wajib selalu muncul
-
 export default function AccessControl() {
-  const [config, setConfig] = useState({ cashier: {} }); // FIX: langsung isi cashier biar gak kosong putih
+  const [config, setConfig] = useState({ cashier: {} });
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const load = async () => {
-      setLoading(true);
-      try {
-        const { data, error } = await supabase.from('role_permissions').select('role, permission_key, allowed');
-        console.log("ROLE_PERMS DATA:", data, "ERROR:", error);
-        if (error) throw error;
-        
-        const map = { cashier: {} }; // FIX: selalu mulai dengan cashier kosong
-        (data || []).forEach(row => {
-          if (!map[row.role]) map[row.role] = {};
-          map[row.role][row.permission_key] = row.allowed;
-        });
-        
-        // Pastikan semua DEFAULT_ROLES ada
-        DEFAULT_ROLES.forEach(r => {
-          if (!map[r]) map[r] = {};
-        });
+  const load = async () => {
+    setLoading(true);
+    const { data, error } = await supabase.from('role_permissions').select('role, permission_key, allowed').eq('role','cashier');
+    if (error) {
+      console.error(error);
+      toast.error("Gagal load: " + error.message);
+    }
+    const map = { cashier: {} };
+    // Default semua TRUE dulu
+    Object.values(ALL_PERMS).forEach(p => map.cashier[p] = true);
+    // Timpa dengan data dari DB (termasuk yang FALSE)
+    (data || []).forEach(row => {
+      map.cashier[row.permission_key] = !!row.allowed;
+    });
+    setConfig(map);
+    setLoading(false);
+  };
 
-        // Kalau data kosong total, isi default TRUE semua biar gak bingung
-        if (!data || data.length === 0) {
-          toast.info("Table role_permissions kosong, pakai default TRUE");
-          DEFAULT_ROLES.forEach(r => {
-            Object.values(ALL_PERMS).forEach(p => {
-              map[r][p] = true;
-            });
-            map[r]['cashier_discount'] = false; // contoh OFF
-          });
-        }
-
-        setConfig(map);
-      } catch (e) {
-        console.error(e);
-        toast.error("Gagal load (RLS?): " + e.message + " - pakai fallback");
-        // FALLBACK PALING AMAN - TETAP MUNCUL WALAU ERROR
-        const fallback = {};
-        DEFAULT_ROLES.forEach(r => {
-          fallback[r] = {};
-          Object.values(ALL_PERMS).forEach(p => fallback[r][p] = true);
-        });
-        setConfig(fallback);
-      }
-      setLoading(false);
-    };
-    load();
-  }, []);
+  useEffect(() => { load(); }, []);
 
   const toggle = (role, perm) => {
     setConfig(prev => ({
@@ -78,19 +49,26 @@ export default function AccessControl() {
   const save = async () => {
     setSaving(true);
     try {
-      for (const role of Object.keys(config).filter(r => r !== 'owner')) {
-        for (const perm of Object.values(ALL_PERMS)) {
-          const allowed = config[role]?.[perm] ?? true;
-          await supabase.from('role_permissions').upsert({
-            role,
-            permission_key: perm,
-            allowed
-          }, { onConflict: 'role,permission_key' });
-        }
-      }
-      toast.success("✅ Akses GLOBAL berhasil disimpan!");
+      // FIX: Bulk upsert SEMUA, bukan satu-satu, dan pakai false eksplisit
+      const rows = Object.values(ALL_PERMS).map(perm => ({
+        role: 'cashier',
+        permission_key: perm,
+        allowed: config.cashier?.[perm] === true // true hanya kalau true, sisanya false
+      }));
+
+      console.log("MAU DISIMPAN:", rows);
+
+      const { error } = await supabase
+        .from('role_permissions')
+        .upsert(rows, { onConflict: 'role,permission_key' });
+
+      if (error) throw error;
+
+      toast.success("✅ Akses GLOBAL berhasil! Yang OFF tetap OFF!");
+      await load(); // reload biar yakin
     } catch (e) {
-      toast.error("Gagal: " + e.message);
+      console.error(e);
+      toast.error("Gagal simpan: " + e.message + " - Cek RLS Supabase!");
     }
     setSaving(false);
   };
@@ -105,15 +83,9 @@ export default function AccessControl() {
         <p className="text-[11px] text-slate-500 mt-0.5">Buka-tutup hak akses karyawan — Global semua outlet</p>
       </div>
 
-      {Object.keys(config).filter(r => r !== 'owner').length === 0 && (
-        <div className="bg-rose-50 border border-rose-200 p-4 rounded-xl text-xs text-rose-700">
-          GAK ADA ROLE TERDETEKSI! Klik Simpan untuk buat default cashier.
-        </div>
-      )}
-
-      {Object.keys(config).filter(r => r !== 'owner').map(role => (
+      {Object.keys(config).map(role => (
         <div key={role} className="rounded-xl border bg-white p-4 shadow-sm">
-          <p className="font-extrabold uppercase text-[12px] mb-3 tracking-wider">{role.replaceAll('_',' ')} - {Object.values(config[role] || {}).filter(Boolean).length} aktif</p>
+          <p className="font-extrabold uppercase text-[12px] mb-3 tracking-wider">{role} - {Object.values(config[role] || {}).filter(Boolean).length} aktif</p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
             {Object.entries(ALL_PERMS).map(([label, perm]) => (
               <label key={perm} className="flex items-center justify-between text-[11px] border border-slate-100 rounded-lg px-3 py-2.5 hover:bg-slate-50 cursor-pointer">
