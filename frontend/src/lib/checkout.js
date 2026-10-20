@@ -12,12 +12,12 @@ const MESSAGES = {
 
 const isNetworkError = (e) => {
   if (!e) return true;
-  if (e.name === "NotFoundError") return true; // INI KUNCI NYA OWY! ANGGAP OFFLINE BIAR GAK PUTIH
+  if (e.name === "NotFoundError") return true;
   return !e.code || /fetch|network|load failed|not found/i.test(e.message || "");
 };
 
-// Single atomic RPC call. Returns { ok, data } | { ok:false, network, code, message, short }
-export async function runCheckout({ outlet_id, items, paid, client_ref }) {
+// FIX: tambah p_discount biar backend tau!
+export async function runCheckout({ outlet_id, items, paid, discount = 0, client_ref }) {
   try {
     if (!outlet_id || !items) {
       return { ok: false, message: "Data tidak lengkap" };
@@ -27,6 +27,7 @@ export async function runCheckout({ outlet_id, items, paid, client_ref }) {
       p_outlet_id: outlet_id,
       p_items: items.map((i) => ({ product_id: i.product_id, qty: i.qty })),
       p_paid: paid,
+      p_discount: discount, // <-- FIX KIRIM DISKON!
       p_client_ref: client_ref,
     });
     
@@ -45,7 +46,6 @@ export async function runCheckout({ outlet_id, items, paid, client_ref }) {
     
   } catch (e) {
     console.warn("runCheckout catch:", e);
-    // JANGAN PERNAH BIKIN PUTIH, ANGGAP OFFLINE AJA
     if (e?.name === "NotFoundError") {
       return { ok: false, network: true, message: "Offline - DB error" };
     }
