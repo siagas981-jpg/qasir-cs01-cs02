@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { Switch } from "@/components/ui/switch";
 import { PERMISSIONS, ROLE_DEFAULTS } from "@/lib/permissions";
-import { supabase } from "@/lib/supabase"; // sesuaikan path supabase mu
+import { supabase } from "@/lib/supabase/client";
 
 export default function AccessControl() {
   const [config, setConfig] = useState(ROLE_DEFAULTS);
