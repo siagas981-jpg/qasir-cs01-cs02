@@ -1,34 +1,41 @@
-// src/components/admin/AccessControl.jsx - FIX PISAH TOTAL
+// src/components/admin/AccessControl.jsx - FIX FULL 115 BARIS - SESUAI TABLE KAMU
 import { useState, useEffect } from "react";
 import { Switch } from "@/components/ui/switch";
-import { PERMISSIONS, ROLE_DEFAULTS } from "@/lib/permissions";
 import { supabase } from "@/lib/supabase/client";
 import { toast } from "sonner";
 
+const ALL_PERMS = {
+  "POS - Checkout / Bayar": "cashier_checkout",
+  "POS - Hapus Item": "cashier_delete_item",
+  "POS - Diskon": "cashier_discount",
+  "POS - Void Transaksi": "cashier_void",
+  "Pembukuan - Transaksi Bank": "pembukuan_bank",
+  "Pembukuan - Laci Kas": "pembukuan_laci",
+  "Pembukuan - Saldo": "pembukuan_saldo",
+};
+
 export default function AccessControl() {
-  const [config, setConfig] = useState(ROLE_DEFAULTS);
+  const [config, setConfig] = useState({});
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  // === FIX 1: LOAD DATA ASLI DARI SUPABASE, BUKAN CUMA DEFAULT ===
   useEffect(() => {
     const load = async () => {
       setLoading(true);
       try {
-        const { data, error } = await supabase.from('role_permissions').select('role, permissions');
+        const { data, error } = await supabase.from('role_permissions').select('role, permission_key, allowed');
         if (error) throw error;
-        if (data && data.length > 0) {
-          const merged = { ...ROLE_DEFAULTS };
-          data.forEach(row => {
-            if (row.role !== 'owner') {
-              merged[row.role] = row.permissions || ROLE_DEFAULTS[row.role] || [];
-            }
-          });
-          setConfig(merged);
-        }
+        const map = {};
+        // Group by role
+        (data || []).forEach(row => {
+          if (!map[row.role]) map[row.role] = {};
+          map[row.role][row.permission_key] = row.allowed;
+        });
+        // Pastikan role cashier ada
+        if (!map['cashier']) map['cashier'] = {};
+        setConfig(map);
       } catch (e) {
-        console.error("Load akses gagal:", e.message);
-        toast.error("Gagal load akses: " + e.message);
+        toast.error("Gagal load: " + e.message);
       }
       setLoading(false);
     };
@@ -36,37 +43,42 @@ export default function AccessControl() {
   }, []);
 
   const toggle = (role, perm) => {
-    setConfig(prev => {
-      const current = prev[role] || [];
-      const has = current.includes(perm);
-      return {
-        ...prev,
-        [role]: has ? current.filter(p => p !== perm) : [...current, perm]
+    setConfig(prev => ({
+      ...prev,
+      [role]: {
+        ...prev[role],
+        [perm]: !prev[role]?.[perm]
       }
-    });
+    }));
   };
 
   const save = async () => {
     setSaving(true);
     try {
-      for (const role of Object.keys(config)) {
-        if (role === 'owner') continue;
-        const { error } = await supabase.from('role_permissions').upsert({ 
-          role, 
-          permissions: config[role] 
-        }, { onConflict: 'role' });
-        if (error) throw error;
+      const roles = Object.keys(config).filter(r => r !== 'owner');
+      for (const role of roles) {
+        for (const perm of Object.values(ALL_PERMS)) {
+          const allowed = config[role]?.[perm] ?? false;
+          const { error } = await supabase.from('role_permissions').upsert({
+            role,
+            permission_key: perm,
+            allowed,
+            created_at: new Date().toISOString()
+          }, { onConflict: 'role,permission_key' });
+          if (error) throw error;
+        }
       }
-      toast.success("✅ Akses GLOBAL berhasil disimpan! Refresh kasir untuk update.");
-      // invalidasi cache permission
-      localStorage.removeItem('permissions_cache');
+      toast.success("✅ Akses GLOBAL berhasil disimpan!");
     } catch (e) {
-      toast.error("Gagal: " + e.message);
+      toast.error("Gagal simpan: " + e.message);
+      console.error(e);
     }
     setSaving(false);
   };
 
-  if (loading) return <div className="p-10 text-sm">Loading akses...</div>;
+  if (loading) {
+    return <div className="w-full max-w-none px-4 md:px-6 py-10 text-sm text-muted-foreground">Loading akses...</div>;
+  }
 
   return (
     <div className="w-full max-w-none px-4 md:px-6 py-4 space-y-4 bg-[#fbfbfb] min-h-screen">
@@ -74,22 +86,24 @@ export default function AccessControl() {
         <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-emerald-700">OWNER</p>
         <h1 className="text-[22px] font-extrabold tracking-tight">Kontrol Akses Kasir</h1>
         <p className="text-[11px] text-slate-500 mt-0.5">Buka-tutup hak akses karyawan — Global semua outlet</p>
-        <p className="text-[10px] text-amber-600 mt-1">⚠️ OFF Diskon = Cuma Diskon mati, Bank & Bayar tetap hidup (udah dipisah!)</p>
+        <p className="text-[10px] text-emerald-700 mt-1 font-semibold">✅ FIX: OFF Diskon ≠ OFF Bank/Bayar (udah pisah per permission_key)</p>
       </div>
 
       {Object.keys(config).filter(r => r !== 'owner').map(role => (
         <div key={role} className="rounded-xl border bg-white p-4 shadow-sm">
-          <p className="font-extrabold uppercase text-[12px] mb-3 tracking-wider">{role.replaceAll('_',' ')} - {config[role]?.length || 0} akses aktif</p>
+          <p className="font-extrabold uppercase text-[12px] mb-3 tracking-wider">{role.replaceAll('_',' ')} - {Object.values(config[role] || {}).filter(Boolean).length} aktif</p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-            {Object.entries(PERMISSIONS).map(([label, perm]) => {
-              const isActive = (config[role] || []).includes(perm);
-              const isCritical = ['cashier_discount','cashier_checkout','pembukuan_bank'].includes(perm);
+            {Object.entries(ALL_PERMS).map(([label, perm]) => {
+              const isActive = !!config[role]?.[perm];
+              const isDiskon = perm === 'cashier_discount';
+              const isBank = perm === 'pembukuan_bank';
+              const isCheckout = perm === 'cashier_checkout';
               return (
-                <label key={perm} className={`flex items-center justify-between text-[11px] border rounded-lg px-3 py-2.5 hover:bg-slate-50 ${isCritical ? 'border-amber-200 bg-amber-50/30' : 'border-slate-100'}`}>
-                  <span className="font-medium">{label.toLowerCase().replaceAll('_',' ')} <span className="text-[9px] text-slate-400">({perm})</span></span>
+                <label key={perm} className={`flex items-center justify-between text-[11px] border rounded-lg px-3 py-2.5 hover:bg-slate-50 cursor-pointer ${isDiskon ? 'border-amber-200 bg-amber-50/50' : ''} ${isBank ? 'border-emerald-200 bg-emerald-50/50' : ''} ${isCheckout ? 'border-blue-200 bg-blue-50/50' : ''} ${!isDiskon && !isBank && !isCheckout ? 'border-slate-100' : ''}`}>
+                  <span className="font-medium">{label.toLowerCase()} <span className="text-[9px] text-slate-400 ml-1">{perm}</span></span>
                   <Switch checked={isActive} onCheckedChange={() => toggle(role, perm)} />
                 </label>
-              )
+              );
             })}
           </div>
         </div>
@@ -98,7 +112,7 @@ export default function AccessControl() {
       <button onClick={save} disabled={saving} className="bg-slate-900 text-white px-6 py-2.5 rounded-xl text-[12px] font-bold w-full md:w-auto hover:bg-black disabled:opacity-50">
         {saving ? "Menyimpan..." : "Simpan Akses Global"}
       </button>
-      <p className="text-[10px] text-slate-400">Setelah simpan, kasir harus logout-login lagi / refresh biar akses baru kepakai.</p>
+      <p className="text-[10px] text-slate-400">Table sesuai screenshot: role | permission_key | allowed TRUE/FALSE</p>
     </div>
   );
 }
