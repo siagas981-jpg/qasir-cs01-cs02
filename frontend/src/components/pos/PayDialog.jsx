@@ -4,26 +4,35 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { rupiah, parseRupiah } from "@/lib/format";
+import { usePermission } from "@/hooks/usePermission";
 
 const QUICK = [5000, 10000, 20000, 50000, 100000];
 
 export function PayDialog({ open, onOpenChange, total, onSubmit, error }) {
   const [paid, setPaid] = useState(0);
   const [busy, setBusy] = useState(false);
+  const [discount, setDiscount] = useState(0);
   const ref = useRef(null);
+
+  const canDiscount = usePermission("cashier_discount");
 
   useEffect(() => {
     if (open) {
       setPaid(0);
+      setDiscount(0);
       ref.current = crypto.randomUUID();
     }
   }, [open]);
 
-  const change = paid - total;
+  // Hitung total setelah diskon
+  const finalTotal = Math.max(0, total - discount);
+  const change = paid - finalTotal;
+
   const submit = async () => {
-    if (busy || paid < total) return;
+    if (busy || paid < finalTotal) return;
     setBusy(true);
-    await onSubmit(paid, ref.current);
+    // Kirim paid dan discount, checkout akan pakai finalTotal sebagai total
+    await onSubmit(paid, ref.current, discount);
     setBusy(false);
   };
 
@@ -32,9 +41,32 @@ export function PayDialog({ open, onOpenChange, total, onSubmit, error }) {
       <DialogContent className="sm:max-w-md bg-background" data-testid="pay-dialog">
         <DialogHeader>
           <DialogTitle className="font-heading text-xl">Pembayaran Tunai</DialogTitle>
-          <DialogDescription>Total belanja <span className="font-mono font-bold text-foreground" data-testid="pay-dialog-total">{rupiah(total)}</span></DialogDescription>
+          <DialogDescription>
+            Total belanja <span className="font-mono font-bold text-foreground" data-testid="pay-dialog-total">{rupiah(total)}</span>
+            {discount > 0 && (
+              <span className="ml-2 text-rose-600">- Diskon {rupiah(discount)} = {rupiah(finalTotal)}</span>
+            )}
+          </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
+          {/* FITUR DISKON - DIKUNCI PAKAI TOGGLE AKSES */}
+          {canDiscount ? (
+            <div>
+              <label className="text-xs font-semibold uppercase tracking-wider text-amber-600">Diskon (Admin/Kasir diizinkan)</label>
+              <Input 
+                inputMode="numeric" 
+                value={discount ? rupiah(discount) : ""} 
+                placeholder="Rp 0 - Diskon" 
+                onChange={(e) => setDiscount(parseRupiah(e.target.value))} 
+                className="h-10 mt-1 font-mono text-sm font-bold border-amber-200" 
+              />
+            </div>
+          ) : (
+            <div className="rounded-md bg-slate-100 p-2 text-[10px] text-slate-500 text-center">
+              🔒 Diskon dinonaktifkan untuk role ini (atur di Menu Akses)
+            </div>
+          )}
+
           <div>
             <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Uang diterima</label>
             <Input autoFocus inputMode="numeric" value={paid ? rupiah(paid) : ""} placeholder="Rp 0"
@@ -42,7 +74,7 @@ export function PayDialog({ open, onOpenChange, total, onSubmit, error }) {
               className="h-14 mt-1 font-mono text-2xl font-bold" data-testid="pay-dialog-cash-input" />
           </div>
           <div className="grid grid-cols-3 gap-2">
-            <Button variant="outline" onClick={() => setPaid(total)} data-testid="quick-cash-button-exact" className="h-11 font-semibold hover:bg-slate-900 hover:text-white">Uang pas</Button>
+            <Button variant="outline" onClick={() => setPaid(finalTotal)} data-testid="quick-cash-button-exact" className="h-11 font-semibold hover:bg-slate-900 hover:text-white">Uang pas</Button>
             {QUICK.map((q) => (
               <Button key={q} variant="outline" onClick={() => setPaid(q)} data-testid={`quick-cash-button-${q}`} className="h-11 font-mono text-sm hover:bg-slate-900 hover:text-white">{rupiah(q)}</Button>
             ))}
@@ -52,7 +84,7 @@ export function PayDialog({ open, onOpenChange, total, onSubmit, error }) {
             <span className={`font-mono text-2xl font-extrabold ${change >= 0 ? "text-emerald-700" : "text-rose-600"}`} data-testid="change-amount-display">{rupiah(Math.abs(change))}</span>
           </div>
           {error && <div className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700" data-testid="pay-dialog-error">{error}</div>}
-          <Button onClick={submit} disabled={busy || paid < total} data-testid="pay-submit-button"
+          <Button onClick={submit} disabled={busy || paid < finalTotal} data-testid="pay-submit-button"
             className="h-14 w-full bg-emerald-600 hover:bg-emerald-700 text-white text-base font-bold">
             {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : "Selesaikan transaksi"}
           </Button>
