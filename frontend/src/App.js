@@ -1,3 +1,4 @@
+import AccessControl from "@/components/admin/AccessControl";
 import "@/App.css";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { Toaster } from "@/components/ui/sonner";
@@ -39,6 +40,7 @@ function App() {
             <Route path="outlets" element={<Owner><Outlets /></Owner>} />
             <Route path="employees" element={<Owner><Employees /></Owner>} />
             <Route path="dashboard/arsip" element={<Owner><Archive /></Owner>} />
+          <Route path="owner/akses" element={<Owner><AccessControl /></Owner>} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
