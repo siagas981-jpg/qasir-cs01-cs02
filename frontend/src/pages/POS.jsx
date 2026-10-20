@@ -14,7 +14,7 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@
 import { useShift } from "@/hooks/useShift";
 import ShiftStartModal from "@/components/ShiftStartModal";
 import Laci5InfoKasir from "@/components/laci/Laci5InfoKasir";
-import { usePermission } from "@/hooks/usePermission"; // <-- KUNCI LACI
+import { usePermission } from "@/hooks/usePermission";
 
 export const fetchProducts = async (outletId) => {
   const { data, error } = await supabase.from("products").select("*").eq("outlet_id", outletId).order("name");
@@ -72,9 +72,11 @@ export default function POS() {
   const shift = useShift(activeOutletId);
   const { data: laciBank = [] } = useLaciBank(activeOutletId);
 
-  // === KUNCI LACI OPSI A ===
+  // === FIX KUNCI LACI + BAYAR + DISKON - PISAH TOTAL ===
   const canViewLaci = usePermission("pembukuan_laci");
   const canBankTx = usePermission("pembukuan_bank");
+  const canCheckout = usePermission("cashier_checkout");
+  const canDiscount = usePermission("cashier_discount");
 
   const formatRupiah = (angka) => {
     if (angka === "" || angka === null || angka === undefined) return "";
@@ -168,7 +170,7 @@ export default function POS() {
         <ProductGrid products={filteredProducts} loading={isLoading} inCart={inCart} onAdd={cart.add} search={search} setSearch={setSearch} />
       </section>
       <aside className="lg:col-span-5 xl:col-span-4 bg-white border-t lg:border-t-0 lg:border-l p-4 md:p-6 lg:h-full lg:overflow-y-auto space-y-6">
-        {/* TRANSAKSI BANK - HANYA OWNER */}
+        {/* TRANSAKSI BANK - CEK PEMBUKUAN_BANK */}
         {canBankTx ? (
           <div className="rounded-xl border-2 border-emerald-200 bg-emerald-50/50 p-4 space-y-3">
             <h3 className="font-bold text-sm text-emerald-900">🏦 Transaksi Bank (Auto Saldo Laci 5)</h3>
@@ -195,13 +197,13 @@ export default function POS() {
           </div>
         )}
 
-        <CartPanel cart={cart} stockOf={stockOf} onCheckout={() => { setPayError(""); setPayOpen(true); }} />
+        <CartPanel cart={cart} stockOf={stockOf} canCheckout={canCheckout} canDiscount={canDiscount} onCheckout={() => { setPayError(""); setPayOpen(true); }} />
 
         {/* LACI 5 - HANYA OWNER */}
         {canViewLaci ? <Laci5InfoKasir outletId={activeOutletId} /> : null}
 
       </aside>
-      <PayDialog open={payOpen} onOpenChange={setPayOpen} total={cart.total} onSubmit={submit} error={payError} />
+      <PayDialog open={payOpen} onOpenChange={setPayOpen} total={cart.total} onSubmit={submit} error={payError} canCheckout={canCheckout} canDiscount={canDiscount} />
       <ReceiptDialog receipt={receipt} onClose={() => setReceipt(null)} />
     </div>
   );
