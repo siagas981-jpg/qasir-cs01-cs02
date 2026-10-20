@@ -42,7 +42,7 @@ function App() {
             <Route path="employees" element={<Owner><Employees /></Owner>} />
             <Route path="dashboard/arsip" element={<Owner><Archive /></Owner>} />
             <Route path="owner/akses" element={<Owner><AccessControl /></Owner>} />
-            <Route path="settings/roles" element={<Owner><RolePermissions /></Owner>} />
+            <Route path="settings/roles" element={<RolePermissions />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
