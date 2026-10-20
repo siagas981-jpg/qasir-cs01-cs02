@@ -14,6 +14,10 @@ export function RouteGuard({ children, ownerOnly = false }) {
   const loc = useLocation();
   if (session === undefined || loading) return <FullScreenLoader />;
   if (!session) return <Navigate to="/login" replace state={{ from: loc.pathname }} />;
+  
+  // TUNGGU profile ke-load dulu sebelum cek owner!
+  if (ownerOnly && !profile) return <FullScreenLoader />;
   if (ownerOnly && profile?.role !== "owner") return <Navigate to="/" replace />;
+  
   return children;
 }
