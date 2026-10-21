@@ -72,10 +72,10 @@ export default function POS() {
   const shift = useShift(activeOutletId);
   const { data: laciBank = [] } = useLaciBank(activeOutletId);
 
-  const canViewLaci = usePermission("pembukuan_laci");
-  const canBankTx = usePermission("pembukuan_bank");
-  const canCheckout = usePermission("cashier_checkout");
-  const canDiscount = usePermission("cashier_discount");
+  const canViewLaci = usePermission("pembukuan_laci", activeOutletId);
+const canBankTx = usePermission("pembukuan_bank", activeOutletId);
+const canCheckout = usePermission("cashier_checkout", activeOutletId);
+const canDiscount = usePermission("cashier_discount", activeOutletId);
 
   const formatRupiah = (angka) => {
     if (angka === "" || angka === null || angka === undefined) return "";
