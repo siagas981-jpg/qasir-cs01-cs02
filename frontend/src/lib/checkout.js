@@ -16,21 +16,22 @@ const isNetworkError = (e) => {
   return !e.code || /fetch|network|load failed|not found/i.test(e.message || "");
 };
 
-export async function runCheckout({ outlet_id, items, paid, discount = 0, client_ref }) {
+export async function runCheckout({ outlet_id, items, paid, discount = 0, client_ref, discount_reason = "", discount_by = "", original_total = 0 }) {
   try {
     if (!outlet_id || !items) {
       return { ok: false, message: "Data tidak lengkap" };
     }
     
     const { data, error } = await supabase.rpc("checkout", {
-      p_outlet_id: outlet_id,
-      p_items: items.map((i) => ({ product_id: i.product_id, qty: i.qty })),
-      p_paid: paid,
-      p_discount: discount,
-      p_client_ref: client_ref,
-    });
-    
-    if (!error) return { ok: true, data };
+  p_outlet_id: outlet_id,
+  p_items: items.map((i) => ({ product_id: i.product_id, qty: i.qty })),
+  p_paid: paid,
+  p_discount: discount,
+  p_client_ref: client_ref,
+  p_discount_reason: discount_reason,
+  p_discount_by: discount_by,
+  p_original_total: original_total,
+});
     
     if (isNetworkError(error)) {
       return { ok: false, network: true, message: "Offline" };
