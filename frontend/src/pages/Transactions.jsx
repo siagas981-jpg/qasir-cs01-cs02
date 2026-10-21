@@ -70,20 +70,40 @@ async function fetchTx(outletId, dateFilter) {
 
 function TxRow({ tx }) {
   const [open, setOpen] = useState(false);
+  const hasDiscount = tx.discount && Number(tx.discount) > 0;
   return (
     <div className="border-b last:border-b-0" data-testid={`transaction-row-${tx.id}`}>
       <button onClick={() => setOpen(!open)} className="w-full grid grid-cols-12 items-center gap-2 px-4 py-3 text-left hover:bg-slate-50 transition-colors" data-testid={`transaction-toggle-${tx.id}`}>
-        <span className="col-span-5 sm:col-span-3 text-sm">{dateTime(tx.created_at)}</span>
+        <span className="col-span-5 sm:col-span-3 text-sm flex flex-col">
+          <span>{dateTime(tx.created_at)}</span>
+          {hasDiscount && <span className="mt-1 inline-flex w-fit rounded bg-amber-100 border border-amber-300 px-1.5 py-0.5 text-[10px] font-bold text-amber-800">DISKON {rupiah(tx.discount)}</span>}
+        </span>
         <span className="hidden sm:block col-span-3 text-sm text-slate-600 truncate">{tx.outlets?.name}</span>
         <span className="hidden sm:block col-span-2 text-xs font-mono text-slate-400">#{tx.id.slice(0, 8)}</span>
         <span className="col-span-6 sm:col-span-3 text-right font-mono font-bold" data-testid={`transaction-total-${tx.id}`}>{rupiah(tx.total)}</span>
         <ChevronDown className={`col-span-1 h-4 w-4 justify-self-end transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
       {open && (
-        <div className="px-4 pb-4 text-sm animate-in fade-in slide-in-from-top-1 duration-200" data-testid={`transaction-items-${tx.id}`}>
+        <div className="px-4 pb-4 text-sm animate-in fade-in slide-in-from-top-1 duration-200 space-y-2" data-testid={`transaction-items-${tx.id}`}>
           {tx.transaction_items.map((i) => (
             <div key={i.id} className="flex justify-between py-1"><span>{i.qty} × {i.product_name} <span className="text-slate-400 font-mono">@ {rupiah(i.price_each)}</span></span><span className="font-mono">{rupiah(i.qty * i.price_each)}</span></div>
           ))}
+          
+          {/* === TAMPILAN DISKON + ALASAN - BARU, GAK NGERUSAK YANG LAMA === */}
+          {hasDiscount && (
+            <div className="rounded-lg border-2 border-amber-200 bg-amber-50 p-3 mt-2">
+              <div className="flex justify-between font-bold text-amber-800">
+                <span>Diskon Diberikan</span>
+                <span>- {rupiah(tx.discount)}</span>
+              </div>
+              <div className="mt-2 text-xs space-y-1">
+                <div><span className="text-slate-500">Alasan:</span> <span className="font-bold text-slate-900">{tx.discount_reason || "Tidak ada catatan (transaksi lama)"}</span></div>
+                <div><span className="text-slate-500">Oleh Kasir:</span> <span className="font-mono text-slate-700">{tx.discount_by || "-"}</span></div>
+                {tx.original_total && <div><span className="text-slate-500">Total Asli:</span> <span className="font-mono">{rupiah(tx.original_total)}</span></div>}
+              </div>
+            </div>
+          )}
+
           <div className="flex justify-between pt-2 mt-2 border-t text-slate-600"><span>Dibayar {rupiah(tx.paid)}</span><span>Kembalian {rupiah(tx.change)}</span></div>
         </div>
       )}
@@ -117,6 +137,7 @@ export default function Transactions() {
   });
 
   const totalFiltered = data.reduce((s, t) => s + t.total, 0);
+  const totalDiskonFiltered = data.reduce((s, t) => s + (Number(t.discount) || 0), 0);
   const months = ["Januari","Februari","Maret","April","Mei","Juni","Juli","Agustus","September","Oktober","November","Desember"];
   const years = Array.from({length: 5}, (_, i) => new Date().getFullYear() - i);
 
@@ -183,9 +204,10 @@ export default function Transactions() {
         )}
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-6">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
         <div className="rounded-xl border bg-white p-5"><p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Total Filter</p><p className="font-mono text-2xl font-extrabold text-emerald-700 mt-1" data-testid="transactions-today-total">{rupiah(totalFiltered)}</p></div>
         <div className="rounded-xl border bg-white p-5"><p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Jumlah Transaksi</p><p className="font-mono text-2xl font-extrabold mt-1" data-testid="transactions-today-count">{data.length}</p></div>
+        <div className="rounded-xl border bg-white p-5"><p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Total Diskon</p><p className="font-mono text-2xl font-extrabold text-amber-600 mt-1">{rupiah(totalDiskonFiltered)}</p></div>
         <div className="rounded-xl border bg-white p-5"><p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Waktu Makassar</p><p className="font-mono text-sm font-bold mt-1">{new Date().toLocaleString("id-ID", {timeZone: "Asia/Makassar"})}</p></div>
       </div>
 
