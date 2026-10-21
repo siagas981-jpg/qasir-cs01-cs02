@@ -105,9 +105,15 @@ const canDiscount = usePermission("cashier_discount", activeOutletId);
   });
   const applyStock = () => qc.setQueryData(key, (old = []) => old.map((p) => ({...p, stock: p.stock - (inCart[p.id] || 0) })));
 
-  const submit = async (paid, client_ref, discount = 0) => {
+  const submit = async (paid, client_ref, discount = 0, discountReason = "") => {
     setPayError("");
     const d = Number(discount) || 0;
+    // === TAMBAHAN VALIDASI ALASAN DISKON ===
+    if (d > 0 && (!discountReason || discountReason.trim().length < 3)) {
+      setPayError("Wajib isi alasan diskon min 3 huruf!");
+      toast.error("Wajib isi alasan diskon!");
+      return;
+    }
     const finalTotal = Math.max(0, cart.total - d);
     if (paid < finalTotal) {
       setPayError("Uang bayar kurang dari total. Kurang Rp " + (finalTotal - paid).toLocaleString("id-ID"));
@@ -118,6 +124,8 @@ const canDiscount = usePermission("cashier_discount", activeOutletId);
       items: cart.items,
       paid: paid,
       discount: d,
+      discount_reason: discountReason, // BARU
+      discount_by: user?.email, // BARU
       client_ref: client_ref,
       user_id: user.id,
       total: finalTotal,
