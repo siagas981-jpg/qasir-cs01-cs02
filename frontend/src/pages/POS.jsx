@@ -156,26 +156,64 @@ const canDiscount = usePermission("cashier_discount", activeOutletId);
     qc.invalidateQueries({ queryKey: ["products", activeOutletId] });
   };
 
-  const handleBankTx = async () => {
-    if (!bankLaciId ||!bankJumlah) { toast.error("Pilih bank & isi jumlah"); return; }
+    const handleBankTx = async () => {
+    if (!bankLaciId || !bankJumlah) { toast.error("Pilih bank & isi jumlah"); return; }
     setBankLoading(true);
     try {
       const nowShift = shift?.currentShift || shift?.shiftName || "MALAM";
+      const jumlahNum = unformatRupiah(bankJumlah);
+      const selectedLaci = laciBank.find((b) => b.id === bankLaciId);
+      if (!selectedLaci) { toast.error("Bank tidak ditemukan"); return; }
+
+      // === KHUSUS 5 BANK AUTO KE CASH BANK ===
+      const KHUSUS_AUTO_CASHBANK = ['BRI', 'BNI', 'MANDIRI', 'DANA', 'BUKU AGEN'];
+      const namaUpper = (selectedLaci.nama || "").toUpperCase();
+      const isKhususBank = KHUSUS_AUTO_CASHBANK.some(k => namaUpper.includes(k));
+      
+      const cashBankLaci = laciBank.find(l => {
+        const n = (l.nama || "").toUpperCase();
+        const k = (l.kode || "").toUpperCase();
+        return k === "LACI_5_CASHBANK" || k.includes("CASHBANK") || (n.includes("CASH") && n.includes("BANK"));
+      });
+
+      console.log("BANK TX:", selectedLaci.nama, "JUMLAH:", jumlahNum, "IS KHUSUS?", isKhususBank, "CASHBANK:", cashBankLaci?.nama);
+
+      // 1. Insert transaksi dulu
       const { error } = await supabase.from("bank_transactions").insert({
         outlet_id: activeOutletId,
         laci_id: bankLaciId,
         shift: nowShift,
         kasir_email: user?.email,
         tipe: bankTipe,
-        jumlah: unformatRupiah(bankJumlah),
-        keterangan: bankKet || (bankTipe + " " + (laciBank.find(function(b){return b.id===bankLaciId;})?.nama || "")),
+        jumlah: jumlahNum,
+        keterangan: bankKet || (bankTipe + " " + (selectedLaci?.nama || "")),
       });
       if (error) throw error;
-      toast.success("Transaksi " + bankTipe + " " + (laciBank.find(function(b){return b.id===bankLaciId;})?.nama || "") + " Rp " + bankJumlah + " berhasil!");
+
+      // 2. Update saldo laci
+      if (bankTipe === "keluar") {
+        if (isKhususBank && cashBankLaci && cashBankLaci.id !== selectedLaci.id) {
+          const { error: e1 } = await supabase.from("laci").update({ saldo: (selectedLaci.saldo || 0) - jumlahNum }).eq("id", selectedLaci.id);
+          if (e1) throw e1;
+          const { error: e2 } = await supabase.from("laci").update({ saldo: (cashBankLaci.saldo || 0) + jumlahNum }).eq("id", cashBankLaci.id);
+          if (e2) throw e2;
+          toast.success(`AUTO: ${selectedLaci.nama} KELUAR -> CASH BANK +Rp ${bankJumlah} berhasil!`);
+        } else {
+          const { error: e1 } = await supabase.from("laci").update({ saldo: (selectedLaci.saldo || 0) - jumlahNum }).eq("id", selectedLaci.id);
+          if (e1) throw e1;
+          toast.success("Transaksi " + bankTipe + " " + selectedLaci.nama + " Rp " + bankJumlah + " berhasil!");
+        }
+      } else {
+        const { error: e1 } = await supabase.from("laci").update({ saldo: (selectedLaci.saldo || 0) + jumlahNum }).eq("id", selectedLaci.id);
+        if (e1) throw e1;
+        toast.success("Transaksi " + bankTipe + " " + selectedLaci.nama + " Rp " + bankJumlah + " berhasil!");
+      }
+
       setBankJumlah(""); setBankKet(""); setBankLaciId("");
       qc.invalidateQueries({ queryKey: ["laci-bank"] });
       qc.invalidateQueries({ queryKey: ["laci"] });
       qc.invalidateQueries({ queryKey: ["laci-mutasi"] });
+      qc.invalidateQueries({ queryKey: ["laci-all"] });
     } catch (e) {
       toast.error("Gagal: " + e.message);
     } finally { setBankLoading(false); }
