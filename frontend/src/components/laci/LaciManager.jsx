@@ -64,7 +64,7 @@ export default function LaciManager({ outletId }) {
     toast.success(`Dihapus`);
   };
 
-  // === HANDLE TRANSFER + AUTO LOGIC KHUSUS 5 BANK ===
+    // === FIX DETEKSI CASH BANK YANG LEBIH PINTAR ===
   const handleTransfer = async (e) => {
     e.preventDefault();
     const fromLaci = lacis.find(l => l.id === transfer.from);
@@ -76,21 +76,32 @@ export default function LaciManager({ outletId }) {
     const namaFromUpper = (fromLaci.nama || "").toUpperCase();
     const isKhususBank = KHUSUS_AUTO_CASHBANK.some(k => namaFromUpper.includes(k));
 
-    // Cari Laci CASH BANK tujuan auto
-    const cashBankLaci = lacis.find(l => (l.nama || "").toUpperCase().includes("CASH BANK") || (l.kode || "").toUpperCase().includes("CASHBANK"));
+    // FIX: Cari CASH BANK dengan berbagai nama
+    const cashBankLaci = lacis.find(l => {
+      const n = (l.nama || "").toUpperCase();
+      const k = (l.kode || "").toUpperCase();
+      return n.includes("CASH BANK") || n.includes("CASHBANK") || n.includes("CASH_BANK") || 
+             k.includes("CASHBANK") || k.includes("CASH_BANK") || 
+             (n.includes("CASH") && n.includes("BANK"));
+    });
+
+    console.log("FROM:", fromLaci.nama, "IS KHUSUS?", isKhususBank, "CASHBANK KETEMU?", cashBankLaci?.nama);
 
     if (isKhususBank) {
-      // === JIKA DARI 5 BANK KHUSUS, OTOMATIS MASUK KE CASH BANK ===
-      if (!cashBankLaci) return toast.error("Laci CASH BANK tidak ditemukan!");
+      if (!cashBankLaci) {
+        toast.error("Laci CASH BANK tidak ditemukan! Cek nama laci harus ada kata CASH BANK");
+        return;
+      }
       
-      // Kurangi dari bank sumber
-      await supabase.from("laci").update({ saldo: (fromLaci.saldo||0) - transfer.amount }).eq("id", fromLaci.id);
-      // Tambah ke CASH BANK (bukan ke yang dipilih user, tapi paksa ke CASH BANK)
-      await supabase.from("laci").update({ saldo: (cashBankLaci.saldo||0) + transfer.amount }).eq("id", cashBankLaci.id);
+      // Paksa masuk ke CASH BANK
+      const { error: err1 } = await supabase.from("laci").update({ saldo: (fromLaci.saldo||0) - transfer.amount }).eq("id", fromLaci.id);
+      if(err1) return toast.error(err1.message);
       
-      toast.success(`AUTO: ${fromLaci.nama} KELUAR ${rupiah(transfer.amount)} -> Masuk CASH BANK`);
+      const { error: err2 } = await supabase.from("laci").update({ saldo: (cashBankLaci.saldo||0) + transfer.amount }).eq("id", cashBankLaci.id);
+      if(err2) return toast.error(err2.message);
+      
+      toast.success(`AUTO SUKSES: ${fromLaci.nama} KELUAR ${rupiah(transfer.amount)} -> Masuk ${cashBankLaci.nama}`);
     } else {
-      // === BANK LAIN, TRANSFER NORMAL SEPERTI BIASA ===
       await supabase.from("laci").update({ saldo: (fromLaci.saldo||0) - transfer.amount }).eq("id", transfer.from);
       await supabase.from("laci").update({ saldo: (toLaci.saldo||0) + transfer.amount }).eq("id", transfer.to);
       toast.success("Transfer berhasil");
