@@ -75,14 +75,13 @@ export default function LaciManager({ outletId }) {
     const namaFromUpper = (fromLaci.nama || "").toUpperCase();
     const isKhususBank = KHUSUS_AUTO_CASHBANK.some(k => namaFromUpper.includes(k));
 
-    const cashBankLaci = lacis.find(l => {
+        const cashBankLaci = lacis.find(l => {
       const n = (l.nama || "").toUpperCase();
       const k = (l.kode || "").toUpperCase();
-      return n.includes("CASH BANK") || n.includes("CASHBANK") || k.includes("CASHBANK") || (n.includes("CASH") && n.includes("BANK"));
+      return k === "LACI_5_CASHBANK" || k.includes("CASHBANK") || (n.includes("CASH") && n.includes("BANK")) || n.includes("LACI 5") || n.includes("LACI_5");
     });
 
-    console.log("FROM:", fromLaci.nama, "IS KHUSUS?", isKhususBank, "CASHBANK:", cashBankLaci?.nama || "TIDAK KETEMU");
-
+        console.log("FROM:", fromLaci.nama, "IS KHUSUS?", isKhususBank, "CASHBANK:", cashBankLaci?.nama || "TIDAK KETEMU");
     if (isKhususBank) {
       if (!cashBankLaci) {
         toast.error("Laci CASH BANK tidak ditemukan!");
