@@ -165,7 +165,7 @@ const canDiscount = usePermission("cashier_discount", activeOutletId);
       const selectedLaci = laciBank.find((b) => b.id === bankLaciId);
       if (!selectedLaci) { toast.error("Bank tidak ditemukan"); return; }
 
-      // === KHUSUS 5 BANK AUTO KE CASH BANK ===
+      // === KHUSUS 5 BANK AUTO CASH BANK BOLAK-BALIK ===
       const KHUSUS_AUTO_CASHBANK = ['BRI', 'BNI', 'MANDIRI', 'DANA', 'BUKU AGEN'];
       const namaUpper = (selectedLaci.nama || "").toUpperCase();
       const isKhususBank = KHUSUS_AUTO_CASHBANK.some(k => namaUpper.includes(k));
@@ -176,9 +176,15 @@ const canDiscount = usePermission("cashier_discount", activeOutletId);
         return k === "LACI_5_CASHBANK" || k.includes("CASHBANK") || (n.includes("CASH") && n.includes("BANK"));
       });
 
-      console.log("BANK TX:", selectedLaci.nama, "JUMLAH:", jumlahNum, "IS KHUSUS?", isKhususBank, "CASHBANK:", cashBankLaci?.nama);
+      // Validasi saldo cashbank kalau MASUK
+      if (bankTipe === "masuk" && isKhususBank && cashBankLaci && (cashBankLaci.saldo || 0) < jumlahNum) {
+        toast.error(`Saldo CASH BANK tidak cukup! Sisa Rp ${Number(cashBankLaci.saldo).toLocaleString()}`);
+        setBankLoading(false);
+        return;
+      }
 
-      // 1. Insert transaksi dulu
+      console.log("BANK TX:", selectedLaci.nama, "JUMLAH:", jumlahNum, "TIPE:", bankTipe, "IS KHUSUS?", isKhususBank);
+
       const { error } = await supabase.from("bank_transactions").insert({
         outlet_id: activeOutletId,
         laci_id: bankLaciId,
@@ -190,23 +196,29 @@ const canDiscount = usePermission("cashier_discount", activeOutletId);
       });
       if (error) throw error;
 
-      // 2. Update saldo laci
-      if (bankTipe === "keluar") {
-        if (isKhususBank && cashBankLaci && cashBankLaci.id !== selectedLaci.id) {
+      // === LOGIC AUTO BOLAK-BALIK ===
+      if (isKhususBank && cashBankLaci && cashBankLaci.id !== selectedLaci.id) {
+        if (bankTipe === "keluar") {
+          // KELUAR: BRI berkurang, CASH BANK nambah
           const { error: e1 } = await supabase.from("laci").update({ saldo: (selectedLaci.saldo || 0) - jumlahNum }).eq("id", selectedLaci.id);
           if (e1) throw e1;
           const { error: e2 } = await supabase.from("laci").update({ saldo: (cashBankLaci.saldo || 0) + jumlahNum }).eq("id", cashBankLaci.id);
           if (e2) throw e2;
-          toast.success(`AUTO: ${selectedLaci.nama} KELUAR -> CASH BANK +Rp ${bankJumlah} berhasil!`);
+          toast.success(`AUTO: ${selectedLaci.nama} KELUAR -> CASH BANK +Rp ${bankJumlah}`);
         } else {
-          const { error: e1 } = await supabase.from("laci").update({ saldo: (selectedLaci.saldo || 0) - jumlahNum }).eq("id", selectedLaci.id);
+          // MASUK (KEBALIKAN): BRI nambah, CASH BANK berkurang
+          const { error: e1 } = await supabase.from("laci").update({ saldo: (selectedLaci.saldo || 0) + jumlahNum }).eq("id", selectedLaci.id);
           if (e1) throw e1;
-          toast.success("Transaksi " + bankTipe + " " + selectedLaci.nama + " Rp " + bankJumlah + " berhasil!");
+          const { error: e2 } = await supabase.from("laci").update({ saldo: (cashBankLaci.saldo || 0) - jumlahNum }).eq("id", cashBankLaci.id);
+          if (e2) throw e2;
+          toast.success(`AUTO: CASH BANK -> ${selectedLaci.nama} +Rp ${bankJumlah}`);
         }
       } else {
-        const { error: e1 } = await supabase.from("laci").update({ saldo: (selectedLaci.saldo || 0) + jumlahNum }).eq("id", selectedLaci.id);
+        // Bank biasa
+        const newSaldo = bankTipe === "keluar" ? (selectedLaci.saldo||0) - jumlahNum : (selectedLaci.saldo||0) + jumlahNum;
+        const { error: e1 } = await supabase.from("laci").update({ saldo: newSaldo }).eq("id", selectedLaci.id);
         if (e1) throw e1;
-        toast.success("Transaksi " + bankTipe + " " + selectedLaci.nama + " Rp " + bankJumlah + " berhasil!");
+        toast.success(`Transaksi ${bankTipe} ${selectedLaci.nama} Rp ${bankJumlah} berhasil!`);
       }
 
       setBankJumlah(""); setBankKet(""); setBankLaciId("");
