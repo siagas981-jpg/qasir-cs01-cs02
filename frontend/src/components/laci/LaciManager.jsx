@@ -64,8 +64,7 @@ export default function LaciManager({ outletId }) {
     toast.success(`Dihapus`);
   };
 
-    // === FIX DETEKSI CASH BANK YANG LEBIH PINTAR ===
-  const handleTransfer = async (e) => {
+      const handleTransfer = async (e) => {
     e.preventDefault();
     const fromLaci = lacis.find(l => l.id === transfer.from);
     let toLaci = lacis.find(l => l.id === transfer.to);
@@ -76,31 +75,24 @@ export default function LaciManager({ outletId }) {
     const namaFromUpper = (fromLaci.nama || "").toUpperCase();
     const isKhususBank = KHUSUS_AUTO_CASHBANK.some(k => namaFromUpper.includes(k));
 
-    // FIX: Cari CASH BANK dengan berbagai nama
     const cashBankLaci = lacis.find(l => {
       const n = (l.nama || "").toUpperCase();
       const k = (l.kode || "").toUpperCase();
-      return n.includes("CASH BANK") || n.includes("CASHBANK") || n.includes("CASH_BANK") || 
-             k.includes("CASHBANK") || k.includes("CASH_BANK") || 
-             (n.includes("CASH") && n.includes("BANK"));
+      return n.includes("CASH BANK") || n.includes("CASHBANK") || k.includes("CASHBANK") || (n.includes("CASH") && n.includes("BANK"));
     });
 
-    console.log("FROM:", fromLaci.nama, "IS KHUSUS?", isKhususBank, "CASHBANK KETEMU?", cashBankLaci?.nama);
+    console.log("FROM:", fromLaci.nama, "IS KHUSUS?", isKhususBank, "CASHBANK:", cashBankLaci?.nama || "TIDAK KETEMU");
 
     if (isKhususBank) {
       if (!cashBankLaci) {
-        toast.error("Laci CASH BANK tidak ditemukan! Cek nama laci harus ada kata CASH BANK");
+        toast.error("Laci CASH BANK tidak ditemukan!");
         return;
       }
-      
-      // Paksa masuk ke CASH BANK
-      const { error: err1 } = await supabase.from("laci").update({ saldo: (fromLaci.saldo||0) - transfer.amount }).eq("id", fromLaci.id);
-      if(err1) return toast.error(err1.message);
-      
-      const { error: err2 } = await supabase.from("laci").update({ saldo: (cashBankLaci.saldo||0) + transfer.amount }).eq("id", cashBankLaci.id);
-      if(err2) return toast.error(err2.message);
-      
-      toast.success(`AUTO SUKSES: ${fromLaci.nama} KELUAR ${rupiah(transfer.amount)} -> Masuk ${cashBankLaci.nama}`);
+      const { error: e1 } = await supabase.from("laci").update({ saldo: (fromLaci.saldo||0) - transfer.amount }).eq("id", fromLaci.id);
+      if (e1) return toast.error(e1.message);
+      const { error: e2 } = await supabase.from("laci").update({ saldo: (cashBankLaci.saldo||0) + transfer.amount }).eq("id", cashBankLaci.id);
+      if (e2) return toast.error(e2.message);
+      toast.success(`AUTO: ${fromLaci.nama} KELUAR -> CASH BANK +${rupiah(transfer.amount)}`);
     } else {
       await supabase.from("laci").update({ saldo: (fromLaci.saldo||0) - transfer.amount }).eq("id", transfer.from);
       await supabase.from("laci").update({ saldo: (toLaci.saldo||0) + transfer.amount }).eq("id", transfer.to);
@@ -111,8 +103,6 @@ export default function LaciManager({ outletId }) {
     setTransfer({ from: "", to: "", amount: 0 });
     qc.invalidateQueries({ queryKey: ["laci-all", outletId] });
   };
-
-  if (isLoading) return <div className="p-3 text-xs">Memuat...</div>;
 
   return (
     <div className="space-y-3">
