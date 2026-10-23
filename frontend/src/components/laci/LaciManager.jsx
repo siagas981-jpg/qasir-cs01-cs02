@@ -116,15 +116,16 @@ export default function LaciManager({ outletId }) {
         });
       } catch (e) { console.log("laci_mutasi skip:", e.message); }
 
-      // FIX FINAL - TANPA getUser BIAR TIDAK THROW - PASTI MASUK DB
-      const kasirEmail = profile?.email || profile?.user_email || "siagas981@gmail.com";
-      const { data: insData, error: err3 } = await supabase.from("transfer_laci").insert({
-        dari_nama: String(fromLaci.nama),
-        ke_nama: String(finalTo.nama),
-        jumlah: Number(jumlah),
-        keterangan: isKhusus ? `AUTO ${fromLaci.nama} → CASH BANK` : `${fromLaci.nama} → ${finalTo.nama}`,
-        kasir_email: String(kasirEmail)
-      }).select();
+      // FIX FINAL - TAMBAH outlet_id BIAR RIWAYAT KEBACA
+const kasirEmail = profile?.email || "siagas981@gmail.com";
+const { data: insData, error: err3 } = await supabase.from("transfer_laci").insert({
+  outlet_id: outletId,
+  dari_nama: String(fromLaci.nama),
+  ke_nama: String(finalTo.nama),
+  jumlah: Number(jumlah),
+  keterangan: `${fromLaci.nama} → ${finalTo.nama}`,
+  kasir_email: String(kasirEmail)
+}).select();
 
       console.log("DEBUG FINAL transfer_laci:", { err3, insData });
 
