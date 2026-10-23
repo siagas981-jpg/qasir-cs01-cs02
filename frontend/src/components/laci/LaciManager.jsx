@@ -97,14 +97,18 @@ export default function LaciManager({ outletId }) {
       // FIX UTAMA: TAMBAH outlet_id BIAR RIWAYAT KEBACA
       const kasirEmail = profile?.email || "siagas981@gmail.com";
       const { data: insData, error: err3 } = await supabase.from("transfer_laci").insert({
-        outlet_id: outletId,
+        outlet_id: fromLaci.outlet_id || fromLaci.outletId || outletId,
+        dari_laci_id: fromLaci.id,
+        ke_laci_id: finalTo.id,
         dari_nama: String(fromLaci.nama),
         ke_nama: String(finalTo.nama),
         jumlah: Number(jumlah),
-        keterangan: `${fromLaci.nama} → ${finalTo.nama}`,
+        keterangan: `${fromLaci.nama} -> ${finalTo.nama}`,
         kasir_email: String(kasirEmail)
       }).select();
 
+      console.log("DEBUG transfer_laci RAW:", insData);
+      console.log("DEBUG transfer_laci ERROR:", err3);
       console.log("DEBUG FINAL transfer_laci:", { err3, insData, outletId });
 
         if (err3) toast.error("Gagal simpan riwayat: " + err3.message);
