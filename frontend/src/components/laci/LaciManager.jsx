@@ -2,7 +2,6 @@ import { useState, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
@@ -28,7 +27,18 @@ export default function LaciManager({ outletId }) {
   const [openEdit, setOpenEdit] = useState(null);
   const [form, setForm] = useState({ kode: "", nama: "", jenis: "CASH", saldo: 0 });
   const [transfer, setTransfer] = useState({ from: "", to: "", amount: 0 });
+  
   const { data: lacis = [] } = useQuery({ queryKey: ["laci-all", outletId], queryFn: () => fetchAllLaci(outletId), enabled: !!outletId });
+  const { data: riwayatTransfer = [] } = useQuery({
+    queryKey: ["transfer-laci", outletId],
+    queryFn: async () => {
+      if (!outletId) return [];
+      const { data, error } = await supabase.from("transfer_laci").select("*").eq("outlet_id", outletId).order("created_at", { ascending: false }).limit(30);
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!outletId
+  });
   
   const KHUSUS = ['BRI', 'BNI', 'MANDIRI', 'DANA', 'BUKU AGEN', 'AGEN'];
 
@@ -94,7 +104,6 @@ export default function LaciManager({ outletId }) {
       const { error: err2 } = await supabase.from("laci").update({ saldo: Number(finalTo.saldo||0) + jumlah }).eq("id", finalTo.id);
       if (err2) { toast.error("err2: " + err2.message); return; }
 
-      // FIX UTAMA: TAMBAH outlet_id BIAR RIWAYAT KEBACA
       const kasirEmail = profile?.email || "siagas981@gmail.com";
       const { data: insData, error: err3 } = await supabase.from("transfer_laci").insert({
         outlet_id: fromLaci.outlet_id || fromLaci.outletId || outletId,
@@ -109,15 +118,15 @@ export default function LaciManager({ outletId }) {
 
       console.log("DEBUG transfer_laci RAW:", insData);
       console.log("DEBUG transfer_laci ERROR:", err3);
-      console.log("DEBUG FINAL transfer_laci:", { err3, insData, outletId });
 
-        if (err3) toast.error("Gagal simpan riwayat: " + err3.message);
-  else toast.success(`Berhasil ${fromLaci.nama} → ${finalTo.nama} ${rupiah(jumlah)}`);
+      if (err3) toast.error("Gagal simpan riwayat: " + err3.message);
+      else toast.success(`Berhasil ${fromLaci.nama} → ${finalTo.nama} ${rupiah(jumlah)}`);
 
-  setOpenTransfer(false);
-  setTransfer({ from: "", to: "", amount: 0 });
-  qc.invalidateQueries();
-} catch (err) {
+      setOpenTransfer(false);
+      setTransfer({ from: "", to: "", amount: 0 });
+      qc.invalidateQueries({ queryKey: ["transfer-laci", outletId] });
+      qc.invalidateQueries({ queryKey: ["laci-all", outletId] });
+    } catch (err) {
       console.error(err);
       toast.error("Error: " + err.message);
     }
@@ -145,6 +154,26 @@ export default function LaciManager({ outletId }) {
             )}
           </div>
         ))}
+      </div>
+
+      {/* RIWAYAT TRANSFER LACI - BARU */}
+      <div className="border rounded-lg p-3 bg-white mt-4">
+        <div className="flex justify-between items-center mb-2">
+          <p className="font-bold text-[12px]">Riwayat Transfer Laci (30 terbaru)</p>
+          <Button size="sm" variant="outline" className="h-6 text-[10px]" onClick={()=>qc.invalidateQueries({ queryKey: ["transfer-laci", outletId] })}>Refresh</Button>
+        </div>
+        <div className="space-y-1 max-h-[300px] overflow-auto">
+          {riwayatTransfer.length === 0 && <p className="text-[11px] text-slate-400 py-4 text-center">Belum ada transfer. Coba transfer CIP → QRIS 10.000</p>}
+          {riwayatTransfer.map((r) => (
+            <div key={r.id} className="flex justify-between items-center text-[11px] border-b py-1.5">
+              <div className="flex flex-col">
+                <span className="font-semibold">{r.dari_nama} → {r.ke_nama}</span>
+                <span className="text-[9px] text-slate-400">{new Date(r.created_at).toLocaleString('id-ID')} • {r.kasir_email}</span>
+              </div>
+              <span className="font-black">{rupiah(r.jumlah)}</span>
+            </div>
+          ))}
+        </div>
       </div>
 
       <Dialog open={!!openEdit} onOpenChange={(v)=>!v && setOpenEdit(null)}>
