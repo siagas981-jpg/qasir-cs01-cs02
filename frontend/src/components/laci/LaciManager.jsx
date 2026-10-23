@@ -64,97 +64,57 @@ export default function LaciManager({ outletId }) {
   };
 
   const handleTransfer = async (e) => {
-    e.preventDefault();
-    try {
-      const fromLaci = lacis.find(l => l.id === transfer.from);
-      if (!fromLaci) return toast.error("Pilih laci asal!");
-      if (!transfer.amount || transfer.amount <= 0) return toast.error("Jumlah harus > 0");
+  e.preventDefault();
+  alert(`DEBUG CLICK: from=${transfer.from} to=${transfer.to} amount=${transfer.amount}`);
+  try {
+    const fromLaci = lacis.find(l => l.id === transfer.from);
+    if (!fromLaci) { alert("GAGAL: Pilih laci asal!"); return; }
+    if (!transfer.amount || transfer.amount <= 0) { alert("GAGAL: Jumlah 0"); return; }
 
-      const namaFromUpper = (fromLaci.nama || "").toUpperCase();
-      const isKhusus = KHUSUS.some(k => namaFromUpper.includes(k));
+    const namaFromUpper = (fromLaci.nama || "").toUpperCase();
+    const isKhusus = KHUSUS.some(k => namaFromUpper.includes(k));
+    const cashBankLaci = lacis.find(l => (l.nama||"").toUpperCase().includes("CASH") && (l.nama||"").toUpperCase().includes("BANK"));
 
-      const cashBankLaci = lacis.find(l => {
-        const n = (l.nama || "").toUpperCase();
-        const k = (l.kode || "").toUpperCase();
-        return n.includes("CASH") && n.includes("BANK") || k.includes("CASHBANK") || n.includes("LACI 5") || n === "CASH BANK";
-      });
-
-      let toLaci = lacis.find(l => l.id === transfer.to);
-      let finalTo = toLaci;
-
-      if (isKhusus) {
-        if (!cashBankLaci) {
-          toast.error(`CASH BANK tidak ketemu! Laci: ${lacis.map(l=>l.nama).join(", ")}`);
-          return;
-        }
-        finalTo = cashBankLaci;
-      } else {
-        if (!toLaci) return toast.error("Pilih laci tujuan!");
-        if (fromLaci.id === toLaci.id) return toast.error("Asal & tujuan sama!");
-      }
-
-      const jumlah = Number(transfer.amount);
-
-      // 1. KURANGI SALDO ASAL
-      const { error: err1 } = await supabase.from("laci").update({ saldo: Number(fromLaci.saldo||0) - jumlah }).eq("id", fromLaci.id);
-      if (err1) return toast.error("Gagal kurangi saldo asal: " + err1.message);
-
-      // 2. TAMBAH SALDO TUJUAN
-      const { error: err2 } = await supabase.from("laci").update({ saldo: Number(finalTo.saldo||0) + jumlah }).eq("id", finalTo.id);
-      if (err2) {
-        await supabase.from("laci").update({ saldo: fromLaci.saldo }).eq("id", fromLaci.id);
-        return toast.error("Gagal tambah saldo tujuan: " + err2.message);
-      }
-
-      // SIMPAN KE laci_mutasi
-      try {
-        await supabase.from("laci_mutasi").insert({
-          laci_id: fromLaci.id,
-          tipe: "bank_keluar",
-          jumlah: jumlah,
-          keterangan: `TRANSFER ${fromLaci.nama} → ${finalTo.nama}`
-        });
-      } catch (e) { console.log("laci_mutasi skip:", e.message); }
-
-      // FIX FINAL - TAMBAH outlet_id BIAR RIWAYAT KEBACA
-const kasirEmail = profile?.email || "siagas981@gmail.com";
-const { data: insData, error: err3 } = await supabase.from("transfer_laci").insert({
-  outlet_id: outletId,
-  dari_nama: String(fromLaci.nama),
-  ke_nama: String(finalTo.nama),
-  jumlah: Number(jumlah),
-  keterangan: `${fromLaci.nama} → ${finalTo.nama}`,
-  kasir_email: String(kasirEmail)
-}).select();
-
-      console.log("DEBUG FINAL transfer_laci:", { err3, insData });
-
-      if (err3) {
-        toast.error(`Saldo pindah tapi riwayat gagal: ${err3.message}`, { duration: 8000 });
-      } else {
-        toast.success(`Berhasil! ${fromLaci.nama} → ${finalTo.nama} ${rupiah(jumlah)}`);
-      }
-
-      setOpenTransfer(false);
-      setTransfer({ from: "", to: "", amount: 0 });
-      qc.invalidateQueries({ queryKey: ["laci-all", outletId] });
-
-    } catch (err) {
-      console.error(err);
-      toast.error("Error: " + err.message);
+    let toLaci = lacis.find(l => l.id === transfer.to);
+    let finalTo = toLaci;
+    if (isKhusus) {
+      if (!cashBankLaci) { alert("CASH BANK tidak ketemu!"); return; }
+      finalTo = cashBankLaci;
+    } else {
+      if (!toLaci) { alert("GAGAL: Pilih laci tujuan! Kamu belum pilih To!"); return; }
     }
-  };
 
-  return (
-    <div className="space-y-3">
-      <BackupFull outletId={outletId} />
-      <div className="flex justify-between items-center">
-        <h3 className="font-bold text-[13px] flex items-center gap-1.5">Laci ({lacis.length}) {isOwner && <Badge className="bg-amber-500 text-white text-[8px] h-4 px-1.5">OWNER</Badge>}</h3>
-        <div className="flex gap-1.5">
-          <Button onClick={() => setOpenTransfer(true)} variant="outline" className="h-7 rounded-full text-[11px] px-3">Transfer / Keluar</Button>
-          <Button onClick={() => setOpenAdd(true)} className="bg-black text-white h-7 rounded-full text-[11px] px-3">+ Tambah</Button>
-        </div>
-      </div>
+    const jumlah = Number(transfer.amount);
+    alert(`AKAN PINDAH: ${fromLaci.nama} → ${finalTo.nama} ${jumlah}`);
+
+    const { error: err1 } = await supabase.from("laci").update({ saldo: Number(fromLaci.saldo||0) - jumlah }).eq("id", fromLaci.id);
+    if (err1) { alert("err1:" + err1.message); return; }
+    const { error: err2 } = await supabase.from("laci").update({ saldo: Number(finalTo.saldo||0) + jumlah }).eq("id", finalTo.id);
+    if (err2) { alert("err2:" + err2.message); return; }
+
+    const kasirEmail = profile?.email || "siagas981@gmail.com";
+    const { data: insData, error: err3 } = await supabase.from("transfer_laci").insert({
+      outlet_id: outletId,
+      dari_nama: String(fromLaci.nama),
+      ke_nama: String(finalTo.nama),
+      jumlah: Number(jumlah),
+      keterangan: `${fromLaci.nama} → ${finalTo.nama}`,
+      kasir_email: String(kasirEmail)
+    }).select();
+
+    alert(`INSERT RESULT err3=${JSON.stringify(err3)} data=${JSON.stringify(insData)}`);
+    console.log("DEBUG FINAL:", { err3, insData });
+
+    if (err3) toast.error(err3.message);
+    else toast.success(`Berhasil ${fromLaci.nama} → ${finalTo.nama}`);
+
+    setOpenTransfer(false);
+    setTransfer({ from: "", to: "", amount: 0 });
+    qc.invalidateQueries({ queryKey: ["laci-all", outletId] });
+  } catch (err) {
+    alert("CATCH: " + err.message);
+  }
+};
 
       <div className="grid grid-cols-3 gap-2.5">
         {lacis.map((laci) => (
