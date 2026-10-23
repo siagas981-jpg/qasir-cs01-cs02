@@ -93,19 +93,19 @@ function TxRow({ tx }) {
   const [open, setOpen] = useState(false);
   const hasDiscount = tx.discount && Number(tx.discount) > 0;
   return (
-    <div className="border-b last:border-b-0" data-testid={`transaction-row-${tx.id}`}>
-      <button onClick={() => setOpen(!open)} className="w-full grid grid-cols-12 items-center gap-2 px-4 py-3 text-left hover:bg-slate-50 transition-colors" data-testid={`transaction-toggle-${tx.id}`}>
+    <div className="border-b last:border-b-0">
+      <button onClick={() => setOpen(!open)} className="w-full grid grid-cols-12 items-center gap-2 px-4 py-3 text-left hover:bg-slate-50 transition-colors">
         <span className="col-span-5 sm:col-span-3 text-sm flex flex-col">
           <span>{dateTime(tx.created_at)}</span>
           {hasDiscount && <span className="mt-1 inline-flex w-fit rounded bg-amber-100 border border-amber-300 px-1.5 py-0.5 text-[10px] font-bold text-amber-800">DISKON {rupiah(tx.discount)}</span>}
         </span>
         <span className="hidden sm:block col-span-3 text-sm text-slate-600 truncate">{tx.outlets?.name}</span>
         <span className="hidden sm:block col-span-2 text-xs font-mono text-slate-400">#{tx.id.slice(0, 8)}</span>
-        <span className="col-span-6 sm:col-span-3 text-right font-mono font-bold" data-testid={`transaction-total-${tx.id}`}>{rupiah(tx.total)}</span>
+        <span className="col-span-6 sm:col-span-3 text-right font-mono font-bold">{rupiah(tx.total)}</span>
         <ChevronDown className={`col-span-1 h-4 w-4 justify-self-end transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
       {open && (
-        <div className="px-4 pb-4 text-sm animate-in fade-in slide-in-from-top-1 duration-200 space-y-2" data-testid={`transaction-items-${tx.id}`}>
+        <div className="px-4 pb-4 text-sm animate-in fade-in slide-in-from-top-1 duration-200 space-y-2">
           {tx.transaction_items.map((i) => (
             <div key={i.id} className="flex justify-between py-1"><span>{i.qty} × {i.product_name} <span className="text-slate-400 font-mono">@ {rupiah(i.price_each)}</span></span><span className="font-mono">{rupiah(i.qty * i.price_each)}</span></div>
           ))}
@@ -151,30 +151,33 @@ export default function Transactions() {
     staleTime: 5_000
   });
 
-  // === FIX: BANK SEKARANG DARI laci_mutasi (bukan bank_transactions) ===
+  // === FIX 1: HAPUS FILTER outlet_id & HAPUS JOIN laci_id ===
   const { data: riwayatBank = [] } = useQuery({
-    queryKey: ["riwayat-bank", outletFilter, dateFilter],
+    queryKey: ["riwayat-bank", dateFilter],
     queryFn: async () => {
-      let q = supabase.from("laci_mutasi").select("*, laci:laci_id(nama, kode)").order("created_at", { ascending: false }).limit(200);
-      if (outletFilter !== "all") q = q.eq("outlet_id", outletFilter);
+      let q = supabase.from("laci_mutasi").select("*").order("created_at", { ascending: false }).limit(300);
       const range = getWitaRange(dateFilter);
       if (range) q = q.gte("created_at", range.startUTC).lte("created_at", range.endUTC);
-      const { data } = await q;
+      const { data, error } = await q;
+      if (error) {
+        console.log("BANK ERROR:", error.message);
+        return [];
+      }
       return data || [];
     },
   });
 
-  // === FIX: TRANSFER LACI SEKARANG DARI transfer_laci (tabel baru) ===
+  // === FIX 2: TRANSFER LACI TETAP PAKAI outletFilter TAPI AMAN ===
   const { data: riwayatLaci = [] } = useQuery({
     queryKey: ["riwayat-laci", outletFilter, dateFilter],
     queryFn: async () => {
-      let q = supabase.from("transfer_laci").select("*").order("created_at", { ascending: false }).limit(200);
+      let q = supabase.from("transfer_laci").select("*").order("created_at", { ascending: false }).limit(300);
       if (outletFilter !== "all") q = q.eq("outlet_id", outletFilter);
       const range = getWitaRange(dateFilter);
       if (range) q = q.gte("created_at", range.startUTC).lte("created_at", range.endUTC);
       const { data, error } = await q;
       if (error) {
-        console.log("transfer_laci belum ada:", error.message);
+        console.log("transfer_laci error:", error.message);
         return [];
       }
       return data || [];
@@ -185,8 +188,10 @@ export default function Transactions() {
   const totalDiskonFiltered = data.reduce((s, t) => s + (Number(t.discount) || 0), 0);
   const months = ["Januari","Februari","Maret","April","Mei","Juni","Juli","Agustus","September","Oktober","November","Desember"];
   const years = Array.from({length: 5}, (_, i) => new Date().getFullYear() - i);
-  const totalBankMasuk = riwayatBank.filter(r=>r.tipe==="masuk").reduce((s,r)=>s+Number(r.jumlah||0),0);
-  const totalBankKeluar = riwayatBank.filter(r=>r.tipe==="keluar").reduce((s,r)=>s+Number(r.jumlah||0),0);
+  
+  // === FIX 3: HITUNG TOTAL PAKAI includes("masuk") BIAR KENA bank_masuk JUGA ===
+  const totalBankMasuk = riwayatBank.filter(r=> (r.tipe||"").toLowerCase().includes("masuk")).reduce((s,r)=>s+Number(r.jumlah||0),0);
+  const totalBankKeluar = riwayatBank.filter(r=> (r.tipe||"").toLowerCase().includes("keluar")).reduce((s,r)=>s+Number(r.jumlah||0),0);
 
   return (
     <div className="p-4 md:p-8 max-w-6xl">
@@ -255,12 +260,12 @@ export default function Transactions() {
               <div className="max-h-[700px] overflow-auto text-sm rounded border">
                 <table className="w-full"><thead className="sticky top-0 bg-slate-100"><tr className="border-b text-left text-xs"><th className="p-2">Tgl (WITA)</th><th className="p-2">Bank</th><th className="p-2">Tipe</th><th className="p-2 text-right">Jumlah</th></tr></thead>
                   <tbody>
-                    {riwayatBank.length===0 ? <tr><td colSpan={4} className="p-4 text-center text-slate-400">Tidak ada data bank untuk filter ini</td></tr> :
+                    {riwayatBank.length===0 ? <tr><td colSpan={4} className="p-4 text-center text-slate-400">Tidak ada data bank untuk filter ini - Coba ganti ke Semua Waktu!</td></tr> :
                     riwayatBank.map(r=>(
                       <tr key={r.id} className="border-b hover:bg-slate-50">
                         <td className="p-2 text-[11px]">{new Date(r.created_at).toLocaleString("id-ID",{timeZone:"Asia/Makassar"})}</td>
-                        <td className="p-2">{r.laci?.nama || "Bank"}<div className="text-[10px] text-slate-400">{r.keterangan || ""}</div></td>
-                        <td className={`p-2 font-bold ${r.tipe==="keluar" ? "text-red-600" : "text-green-600"}`}>{r.tipe}</td>
+                        <td className="p-2">{r.keterangan || r.laci_id || "Bank"}<div className="text-[10px] text-slate-400">{r.keterangan || ""}</div></td>
+                        <td className={`p-2 font-bold ${(r.tipe||"").toLowerCase().includes("keluar") ? "text-red-600" : "text-green-600"}`}>{r.tipe}</td>
                         <td className="p-2 text-right font-mono">Rp {Number(r.jumlah).toLocaleString("id-ID")}</td>
                       </tr>
                     ))}
@@ -273,7 +278,7 @@ export default function Transactions() {
               <div className="max-h-[700px] overflow-auto text-sm rounded border">
                 <table className="w-full"><thead className="sticky top-0 bg-slate-100"><tr className="border-b text-left text-xs"><th className="p-2">Tgl (WITA)</th><th className="p-2">Dari → Ke</th><th className="p-2 text-right">Jumlah</th></tr></thead>
                   <tbody>
-                    {riwayatLaci.length===0 ? <tr><td colSpan={3} className="p-4 text-center text-slate-400">Belum ada transfer. Buat tabel transfer_laci dulu & coba transfer DANA → CASH BANK!</td></tr> :
+                    {riwayatLaci.length===0 ? <tr><td colSpan={3} className="p-4 text-center text-slate-400">Belum ada transfer. Coba transfer DANA → CASH BANK!</td></tr> :
                     riwayatLaci.map(r=>(
                       <tr key={r.id} className="border-b hover:bg-slate-50">
                         <td className="p-2 text-[11px]">{new Date(r.created_at).toLocaleString("id-ID",{timeZone:"Asia/Makassar"})}</td>
