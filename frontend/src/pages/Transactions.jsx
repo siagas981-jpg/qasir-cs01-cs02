@@ -169,20 +169,19 @@ export default function Transactions() {
 
   // === FIX 2: TRANSFER LACI TETAP PAKAI outletFilter TAPI AMAN ===
   const { data: riwayatLaci = [] } = useQuery({
-    queryKey: ["riwayat-laci", outletFilter, dateFilter],
-    queryFn: async () => {
-      let q = supabase.from("transfer_laci").select("*").order("created_at", { ascending: false }).limit(300);
-      if (outletFilter !== "all") q = q.eq("outlet_id", outletFilter);
-      const range = getWitaRange(dateFilter);
-      if (range) q = q.gte("created_at", range.startUTC).lte("created_at", range.endUTC);
-      const { data, error } = await q;
-      if (error) {
-        console.log("transfer_laci error:", error.message);
-        return [];
-      }
-      return data || [];
-    },
-  });
+  queryKey: ["riwayat-laci", dateFilter],
+  queryFn: async () => {
+    let q = supabase.from("transfer_laci").select("*").order("created_at", { ascending: false }).limit(300);
+    const range = getWitaRange(dateFilter);
+    if (range) q = q.gte("created_at", range.startUTC).lte("created_at", range.endUTC);
+    const { data, error } = await q;
+    if (error) {
+      console.log("transfer_laci error:", error.message);
+      return [];
+    }
+    return data || [];
+  },
+});
 
   const totalFiltered = data.reduce((s, t) => s + t.total, 0);
   const totalDiskonFiltered = data.reduce((s, t) => s + (Number(t.discount) || 0), 0);
