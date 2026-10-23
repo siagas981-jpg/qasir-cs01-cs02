@@ -106,29 +106,30 @@ export default function LaciManager({ outletId }) {
         return toast.error("Gagal tambah saldo tujuan: " + err2.message);
       }
 
-      // === FIX TAMBAHAN 1: SIMPAN KE laci_mutasi BIAR MUNCUL DI KIRI (Riwayat Bank) ===
-      const { error: errMutasi } = await supabase.from("laci_mutasi").insert({
-        laci_id: fromLaci.id,
-        tipe: "bank_keluar",
-        jumlah: jumlah,
-        keterangan: `TRANSFER ${fromLaci.nama} → ${finalTo.nama} ${isKhusus ? "(AUTO CASH BANK)" : ""}`
-      });
-      if (errMutasi) console.log("laci_mutasi gagal:", errMutasi.message);
+      // SIMPAN KE laci_mutasi
+      try {
+        await supabase.from("laci_mutasi").insert({
+          laci_id: fromLaci.id,
+          tipe: "bank_keluar",
+          jumlah: jumlah,
+          keterangan: `TRANSFER ${fromLaci.nama} → ${finalTo.nama}`
+        });
+      } catch (e) { console.log("laci_mutasi skip:", e.message); }
 
-      // === FIX TAMBAHAN 2: SIMPAN KE transfer_laci BIAR MUNCUL DI KANAN (Transfer Laci) ===
-      // === FIX INSERT BIAR SAMA KAYAK MANUAL YANG SUKSES ===
-const { data: { user } } = await supabase.auth.getUser();
-const { error: err3 } = await supabase.from("transfer_laci").insert({
-  dari_nama: fromLaci.nama,
-  ke_nama: finalTo.nama,
-  jumlah: jumlah,
-  keterangan: isKhusus ? `AUTO ${fromLaci.nama} → CASH BANK` : `${fromLaci.nama} → ${finalTo.nama}`,
-  kasir_email: user?.email || "siagas981@gmail.com"
-});
-      
+      // FIX FINAL - TANPA getUser BIAR TIDAK THROW - PASTI MASUK DB
+      const kasirEmail = profile?.email || profile?.user_email || "siagas981@gmail.com";
+      const { data: insData, error: err3 } = await supabase.from("transfer_laci").insert({
+        dari_nama: String(fromLaci.nama),
+        ke_nama: String(finalTo.nama),
+        jumlah: Number(jumlah),
+        keterangan: isKhusus ? `AUTO ${fromLaci.nama} → CASH BANK` : `${fromLaci.nama} → ${finalTo.nama}`,
+        kasir_email: String(kasirEmail)
+      }).select();
+
+      console.log("DEBUG FINAL transfer_laci:", { err3, insData });
+
       if (err3) {
-        console.error("transfer_laci GAGAL - INI PENYEBAB 0 x:", err3);
-        toast.error(`Saldo pindah tapi riwayat transfer gagal: ${err3.message}. Jalankan SQL CREATE TABLE transfer_laci!`, { duration: 6000 });
+        toast.error(`Saldo pindah tapi riwayat gagal: ${err3.message}`, { duration: 8000 });
       } else {
         toast.success(`Berhasil! ${fromLaci.nama} → ${finalTo.nama} ${rupiah(jumlah)}`);
       }
@@ -177,7 +178,7 @@ const { error: err3 } = await supabase.from("transfer_laci").insert({
       <Dialog open={openAdd} onOpenChange={setOpenAdd}><DialogContent className="bg-white"><DialogHeader><DialogTitle>Tambah Laci</DialogTitle></DialogHeader><form onSubmit={handleAdd} className="space-y-3"><Input value={form.kode} onChange={e=>setForm({...form, kode: e.target.value})} placeholder="Kode" className="h-8" /><Input value={form.nama} onChange={e=>setForm({...form, nama: e.target.value})} placeholder="Nama" className="h-8" /><Input value={rupiah(form.saldo)} onChange={e=>setForm({...form, saldo: parseRupiah(e.target.value)})} className="h-8" /><Button type="submit" className="w-full bg-black text-white">Simpan</Button></form></DialogContent></Dialog>
       
       <Dialog open={openTransfer} onOpenChange={setOpenTransfer}><DialogContent className="bg-white"><DialogHeader><DialogTitle>Transfer / Transaksi Keluar</DialogTitle>
-        <p className="text-[11px] text-slate-500">Jika pilih BRI/BNI/MANDIRI/DANA/BUKU AGEN, otomatis masuk ke CASH BANK. Pastikan ada laci bernama CASH BANK!</p>
+        <p className="text-[11px] text-slate-500">Jika pilih BRI/BNI/MANDIRI/DANA/BUKU AGEN, otomatis masuk ke CASH BANK.</p>
         <p className="text-[10px] text-slate-400">Laci ada: {lacis.map(l=>l.nama).join(", ")}</p>
       </DialogHeader>
       <form onSubmit={handleTransfer} className="space-y-3">
