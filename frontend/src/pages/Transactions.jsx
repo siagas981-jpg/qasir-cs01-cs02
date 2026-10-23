@@ -167,18 +167,18 @@ export default function Transactions() {
     },
   });
 
-  // === FIX 2: TRANSFER LACI TETAP PAKAI outletFilter TAPI AMAN ===
-  const { data: riwayatLaci = [] } = useQuery({
-  queryKey: ["riwayat-laci", dateFilter],
+  // FIX TRANSFER LACI - SIMPLE TANPA FILTER
+const { data: riwayatLaci = [] } = useQuery({
+  queryKey: ["riwayat-laci-test"],
   queryFn: async () => {
-    let q = supabase.from("transfer_laci").select("*").order("created_at", { ascending: false }).limit(300);
-    const range = getWitaRange(dateFilter);
-    if (range) q = q.gte("created_at", range.startUTC).lte("created_at", range.endUTC);
-    const { data, error } = await q;
-    if (error) {
-      console.log("transfer_laci error:", error.message);
-      return [];
-    }
+    const { data, error } = await supabase
+      .from("transfer_laci")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(100);
+    console.log("DEBUG transfer_laci RAW:", data);
+    console.log("DEBUG transfer_laci ERROR:", error);
+    if (error) return [];
     return data || [];
   },
 });
