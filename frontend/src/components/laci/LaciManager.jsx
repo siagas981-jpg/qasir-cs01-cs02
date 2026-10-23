@@ -117,11 +117,13 @@ export default function LaciManager({ outletId }) {
 
       // === FIX TAMBAHAN 2: SIMPAN KE transfer_laci BIAR MUNCUL DI KANAN (Transfer Laci) ===
       // === FIX INSERT BIAR SAMA KAYAK MANUAL YANG SUKSES ===
+const { data: { user } } = await supabase.auth.getUser();
 const { error: err3 } = await supabase.from("transfer_laci").insert({
   dari_nama: fromLaci.nama,
   ke_nama: finalTo.nama,
   jumlah: jumlah,
   keterangan: isKhusus ? `AUTO ${fromLaci.nama} → CASH BANK` : `${fromLaci.nama} → ${finalTo.nama}`,
+  kasir_email: user?.email || "siagas981@gmail.com"
 });
       
       if (err3) {
