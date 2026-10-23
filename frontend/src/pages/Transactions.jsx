@@ -9,13 +9,11 @@ import { rupiah, dateTime } from "@/lib/format";
 async function fetchTx(outletId, dateFilter) {
   let q = supabase.from("transactions").select("*, outlets(name), transaction_items(*)").order("created_at", { ascending: false }).limit(200);
   if (outletId !== "all") q = q.eq("outlet_id", outletId);
-
   const getWitaDate = (d = new Date()) => new Date(d.toLocaleString("en-US", { timeZone: "Asia/Makassar" }));
   const toWitaISODate = (d) => {
     const wita = getWitaDate(d);
     return `${wita.getFullYear()}-${String(wita.getMonth() + 1).padStart(2, "0")}-${String(wita.getDate()).padStart(2, "0")}`;
   };
-
   if (dateFilter) {
     const { type, start, end, month, year } = dateFilter;
     if (type === "hari_ini") {
@@ -50,7 +48,6 @@ async function fetchTx(outletId, dateFilter) {
   return data;
 }
 
-// === HELPER FILTER WITA UNTUK BANK & LACI ===
 function getWitaRange(dateFilter) {
   if (!dateFilter) return null;
   const getWitaDate = (d = new Date()) => new Date(d.toLocaleString("en-US", { timeZone: "Asia/Makassar" }));
@@ -154,10 +151,11 @@ export default function Transactions() {
     staleTime: 5_000
   });
 
+  // === FIX: BANK SEKARANG DARI laci_mutasi (bukan bank_transactions) ===
   const { data: riwayatBank = [] } = useQuery({
     queryKey: ["riwayat-bank", outletFilter, dateFilter],
     queryFn: async () => {
-      let q = supabase.from("bank_transactions").select("*, laci:laci_id(nama, kode)").order("created_at", { ascending: false }).limit(200);
+      let q = supabase.from("laci_mutasi").select("*, laci:laci_id(nama, kode)").order("created_at", { ascending: false }).limit(200);
       if (outletFilter !== "all") q = q.eq("outlet_id", outletFilter);
       const range = getWitaRange(dateFilter);
       if (range) q = q.gte("created_at", range.startUTC).lte("created_at", range.endUTC);
@@ -166,14 +164,19 @@ export default function Transactions() {
     },
   });
 
+  // === FIX: TRANSFER LACI SEKARANG DARI transfer_laci (tabel baru) ===
   const { data: riwayatLaci = [] } = useQuery({
     queryKey: ["riwayat-laci", outletFilter, dateFilter],
     queryFn: async () => {
-      let q = supabase.from("laci_mutasi").select("*").order("created_at", { ascending: false }).limit(200);
+      let q = supabase.from("transfer_laci").select("*").order("created_at", { ascending: false }).limit(200);
       if (outletFilter !== "all") q = q.eq("outlet_id", outletFilter);
       const range = getWitaRange(dateFilter);
       if (range) q = q.gte("created_at", range.startUTC).lte("created_at", range.endUTC);
-      const { data } = await q;
+      const { data, error } = await q;
+      if (error) {
+        console.log("transfer_laci belum ada:", error.message);
+        return [];
+      }
       return data || [];
     },
   });
@@ -182,7 +185,6 @@ export default function Transactions() {
   const totalDiskonFiltered = data.reduce((s, t) => s + (Number(t.discount) || 0), 0);
   const months = ["Januari","Februari","Maret","April","Mei","Juni","Juli","Agustus","September","Oktober","November","Desember"];
   const years = Array.from({length: 5}, (_, i) => new Date().getFullYear() - i);
-
   const totalBankMasuk = riwayatBank.filter(r=>r.tipe==="masuk").reduce((s,r)=>s+Number(r.jumlah||0),0);
   const totalBankKeluar = riwayatBank.filter(r=>r.tipe==="keluar").reduce((s,r)=>s+Number(r.jumlah||0),0);
 
@@ -206,7 +208,6 @@ export default function Transactions() {
         <button onClick={() => setTabRiwayat("bank")} className={`px-5 py-2.5 rounded-xl text-sm font-bold border ${tabRiwayat==="bank" ? "bg-green-600 text-white border-green-600" : "bg-white"}`}>🏦 Bank & Laci (AUTO Laci 5)</button>
       </div>
 
-      {/* FILTER SEKARANG MUNCUL DI 2 TAB */}
       <div className="rounded-xl border bg-white p-4 mb-6 flex flex-wrap gap-3 items-center">
         <div className="flex items-center gap-2 text-sm font-semibold"><Calendar className="h-4 w-4"/> Filter:</div>
         <Select value={period} onValueChange={setPeriod}>
@@ -250,15 +251,15 @@ export default function Transactions() {
           </div>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <div className="rounded-xl border bg-white p-4">
-              <h3 className="font-bold mb-3">🏦 Riwayat Bank - AUTO ke Laci 5</h3>
+              <h3 className="font-bold mb-3">🏦 Riwayat Bank - dari laci_mutasi</h3>
               <div className="max-h-[700px] overflow-auto text-sm rounded border">
                 <table className="w-full"><thead className="sticky top-0 bg-slate-100"><tr className="border-b text-left text-xs"><th className="p-2">Tgl (WITA)</th><th className="p-2">Bank</th><th className="p-2">Tipe</th><th className="p-2 text-right">Jumlah</th></tr></thead>
                   <tbody>
-                    {riwayatBank.length===0 ? <tr><td colSpan={4} className="p-4 text-center text-slate-400">Tidak ada data untuk filter ini</td></tr> :
+                    {riwayatBank.length===0 ? <tr><td colSpan={4} className="p-4 text-center text-slate-400">Tidak ada data bank untuk filter ini</td></tr> :
                     riwayatBank.map(r=>(
                       <tr key={r.id} className="border-b hover:bg-slate-50">
                         <td className="p-2 text-[11px]">{new Date(r.created_at).toLocaleString("id-ID",{timeZone:"Asia/Makassar"})}</td>
-                        <td className="p-2">{r.laci?.nama || r.bank_name || "Bank"} <span className="bg-yellow-200 text-[9px] px-1 rounded font-bold ml-1">AUTO LACI 5</span><div className="text-[10px] text-slate-400">{r.keterangan || r.deskripsi || ""}</div></td>
+                        <td className="p-2">{r.laci?.nama || "Bank"}<div className="text-[10px] text-slate-400">{r.keterangan || ""}</div></td>
                         <td className={`p-2 font-bold ${r.tipe==="keluar" ? "text-red-600" : "text-green-600"}`}>{r.tipe}</td>
                         <td className="p-2 text-right font-mono">Rp {Number(r.jumlah).toLocaleString("id-ID")}</td>
                       </tr>
@@ -268,16 +269,16 @@ export default function Transactions() {
               </div>
             </div>
             <div className="rounded-xl border bg-white p-4">
-              <h3 className="font-bold mb-3">🔁 Riwayat Transfer Antar Laci</h3>
+              <h3 className="font-bold mb-3">🔁 Riwayat Transfer Antar Laci - BARU</h3>
               <div className="max-h-[700px] overflow-auto text-sm rounded border">
                 <table className="w-full"><thead className="sticky top-0 bg-slate-100"><tr className="border-b text-left text-xs"><th className="p-2">Tgl (WITA)</th><th className="p-2">Dari → Ke</th><th className="p-2 text-right">Jumlah</th></tr></thead>
                   <tbody>
-                    {riwayatLaci.length===0 ? <tr><td colSpan={3} className="p-4 text-center text-slate-400">Tidak ada data untuk filter ini</td></tr> :
+                    {riwayatLaci.length===0 ? <tr><td colSpan={3} className="p-4 text-center text-slate-400">Belum ada transfer. Buat tabel transfer_laci dulu & coba transfer DANA → CASH BANK!</td></tr> :
                     riwayatLaci.map(r=>(
                       <tr key={r.id} className="border-b hover:bg-slate-50">
                         <td className="p-2 text-[11px]">{new Date(r.created_at).toLocaleString("id-ID",{timeZone:"Asia/Makassar"})}</td>
-                        <td className="p-2">{r.from_nama||r.dari_laci||r.from_laci||r.from_laci_nama||"-"} → {r.to_nama||r.ke_laci||r.to_laci||r.to_laci_nama||"-"}<div className="text-[10px] text-slate-400">{r.catatan||r.keterangan||""}</div></td>
-                        <td className="p-2 text-right font-mono">Rp {Number(r.jumlah||r.nominal||0).toLocaleString("id-ID")}</td>
+                        <td className="p-2 font-bold">{r.dari_nama} → {r.ke_nama}<div className="text-[10px] text-slate-400 font-normal">{r.keterangan||""}</div><div className="text-[9px] text-slate-400 font-normal">{r.kasir_email||""}</div></td>
+                        <td className="p-2 text-right font-mono font-bold">Rp {Number(r.jumlah||0).toLocaleString("id-ID")}</td>
                       </tr>
                     ))}
                   </tbody>
