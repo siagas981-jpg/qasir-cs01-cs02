@@ -116,16 +116,13 @@ export default function LaciManager({ outletId }) {
       if (errMutasi) console.log("laci_mutasi gagal:", errMutasi.message);
 
       // === FIX TAMBAHAN 2: SIMPAN KE transfer_laci BIAR MUNCUL DI KANAN (Transfer Laci) ===
-      const { error: err3 } = await supabase.from("transfer_laci").insert({
-        outlet_id: outletId,
-        dari_laci_id: fromLaci.id,
-        ke_laci_id: finalTo.id,
-        dari_nama: fromLaci.nama,
-        ke_nama: finalTo.nama,
-        jumlah: jumlah,
-        keterangan: isKhusus ? `AUTO ${fromLaci.nama} → CASH BANK` : `${fromLaci.nama} → ${finalTo.nama}`,
-        kasir_email: profile?.email || "kasir"
-      });
+      // === FIX INSERT BIAR SAMA KAYAK MANUAL YANG SUKSES ===
+const { error: err3 } = await supabase.from("transfer_laci").insert({
+  dari_nama: fromLaci.nama,
+  ke_nama: finalTo.nama,
+  jumlah: jumlah,
+  keterangan: isKhusus ? `AUTO ${fromLaci.nama} → CASH BANK` : `${fromLaci.nama} → ${finalTo.nama}`,
+});
       
       if (err3) {
         console.error("transfer_laci GAGAL - INI PENYEBAB 0 x:", err3);
