@@ -80,47 +80,58 @@ export default function LaciManager({ outletId }) {
     try {
       const fromLaci = lacis.find(l => l.id === transfer.from);
       if (!fromLaci) { toast.error("Pilih laci asal!"); return; }
-      if (!transfer.amount || Number(transfer.amount) <= 0) { toast.error("Jumlah harus > 0"); return; }
+      
+      const jumlah = Number(transfer.amount) || 0;
+      if (jumlah <= 0) { toast.error("Jumlah harus > 0"); return; }
 
       const namaFromUpper = (fromLaci.nama || "").toUpperCase();
       const isKhusus = KHUSUS.some(k => namaFromUpper.includes(k));
       const cashBankLaci = lacis.find(l => (l.nama||"").toUpperCase().includes("CASH") && (l.nama||"").toUpperCase().includes("BANK"));
 
-      let toLaci = lacis.find(l => l.id === transfer.to);
-      let finalTo = toLaci;
+      let finalTo = lacis.find(l => l.id === transfer.to);
 
       if (isKhusus) {
-        if (!cashBankLaci) { toast.error("CASH BANK tidak ketemu!"); return; }
+        if (!cashBankLaci) { toast.error("CASH BANK tidak ketemu! Buat dulu laci CASH BANK"); return; }
         finalTo = cashBankLaci;
       } else {
-        if (!toLaci) { toast.error("Pilih laci tujuan!"); return; }
+        if (!finalTo) { toast.error("Pilih laci tujuan!"); return; }
       }
 
-      const jumlah = Number(transfer.amount);
+      if (fromLaci.id === finalTo.id) { toast.error("Asal dan tujuan sama!"); return; }
 
+      // UPDATE SALDO
       const { error: err1 } = await supabase.from("laci").update({ saldo: Number(fromLaci.saldo||0) - jumlah }).eq("id", fromLaci.id);
-      if (err1) { toast.error("err1: " + err1.message); return; }
+      if (err1) { toast.error("err1 saldo asal: " + err1.message); return; }
 
       const { error: err2 } = await supabase.from("laci").update({ saldo: Number(finalTo.saldo||0) + jumlah }).eq("id", finalTo.id);
-      if (err2) { toast.error("err2: " + err2.message); return; }
+      if (err2) { 
+        await supabase.from("laci").update({ saldo: Number(fromLaci.saldo||0) }).eq("id", fromLaci.id);
+        toast.error("err2 saldo tujuan: " + err2.message); return; 
+      }
 
-      const kasirEmail = profile?.email || "siagas981@gmail.com";
-      const { data: insData, error: err3 } = await supabase.from("transfer_laci").insert({
-        outlet_id: fromLaci.outlet_id || fromLaci.outletId || outletId,
+      // INSERT RIWAYAT - FIX UTAMA
+      const realOutletId = fromLaci.outlet_id || outletId;
+      console.log("DEBUG REAL OUTLET:", realOutletId);
+
+      const { data: insData, error: err3 } = await supabase.from("transfer_laci").insert([{
+        outlet_id: realOutletId,
         dari_laci_id: fromLaci.id,
         ke_laci_id: finalTo.id,
         dari_nama: String(fromLaci.nama),
         ke_nama: String(finalTo.nama),
         jumlah: Number(jumlah),
         keterangan: `${fromLaci.nama} -> ${finalTo.nama}`,
-        kasir_email: String(kasirEmail)
-      }).select();
+        kasir_email: String(profile?.email || "siagas981@gmail.com")
+      }]).select();
 
       console.log("DEBUG transfer_laci RAW:", insData);
       console.log("DEBUG transfer_laci ERROR:", err3);
 
-      if (err3) toast.error("Gagal simpan riwayat: " + err3.message);
-      else toast.success(`Berhasil ${fromLaci.nama} → ${finalTo.nama} ${rupiah(jumlah)}`);
+      if (err3) {
+        toast.error("Gagal simpan riwayat: " + err3.message);
+      } else {
+        toast.success(`Berhasil ${fromLaci.nama} → ${finalTo.nama} ${rupiah(jumlah)}`);
+      }
 
       setOpenTransfer(false);
       setTransfer({ from: "", to: "", amount: 0 });
@@ -156,14 +167,13 @@ export default function LaciManager({ outletId }) {
         ))}
       </div>
 
-      {/* RIWAYAT TRANSFER LACI - BARU */}
       <div className="border rounded-lg p-3 bg-white mt-4">
         <div className="flex justify-between items-center mb-2">
-          <p className="font-bold text-[12px]">Riwayat Transfer Laci (30 terbaru)</p>
+          <p className="font-bold text-[12px]">Riwayat Transfer Laci (30 terbaru) - outlet: {outletId ? outletId.slice(0,8) : 'NO OUTLET'}</p>
           <Button size="sm" variant="outline" className="h-6 text-[10px]" onClick={()=>qc.invalidateQueries({ queryKey: ["transfer-laci", outletId] })}>Refresh</Button>
         </div>
         <div className="space-y-1 max-h-[300px] overflow-auto">
-          {riwayatTransfer.length === 0 && <p className="text-[11px] text-slate-400 py-4 text-center">Belum ada transfer. Coba transfer CIP → QRIS 10.000</p>}
+          {riwayatTransfer.length === 0 && <p className="text-[11px] text-slate-400 py-4 text-center">Belum ada transfer. Pastikan outletId ada & sudah transfer QRIS→CIP</p>}
           {riwayatTransfer.map((r) => (
             <div key={r.id} className="flex justify-between items-center text-[11px] border-b py-1.5">
               <div className="flex flex-col">
