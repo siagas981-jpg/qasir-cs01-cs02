@@ -73,7 +73,6 @@ export default function LaciManager({ outletId }) {
       const namaFromUpper = (fromLaci.nama || "").toUpperCase();
       const isKhusus = KHUSUS.some(k => namaFromUpper.includes(k));
 
-      // CARI CASH BANK - VERSI LEBIH LONGGAR
       const cashBankLaci = lacis.find(l => {
         const n = (l.nama || "").toUpperCase();
         const k = (l.kode || "").toUpperCase();
@@ -85,8 +84,7 @@ export default function LaciManager({ outletId }) {
 
       if (isKhusus) {
         if (!cashBankLaci) {
-          console.log("LACI LIST:", lacis.map(l=>l.nama));
-          toast.error(`CASH BANK tidak ketemu! Laci kamu: ${lacis.map(l=>l.nama).join(", ")} - Buat dulu laci bernama CASH BANK`);
+          toast.error(`CASH BANK tidak ketemu! Laci: ${lacis.map(l=>l.nama).join(", ")}`);
           return;
         }
         finalTo = cashBankLaci;
@@ -96,25 +94,28 @@ export default function LaciManager({ outletId }) {
       }
 
       const jumlah = Number(transfer.amount);
-      console.log("TRANSFER:", fromLaci.nama, "->", finalTo.nama, jumlah);
 
       // 1. KURANGI SALDO ASAL
       const { error: err1 } = await supabase.from("laci").update({ saldo: Number(fromLaci.saldo||0) - jumlah }).eq("id", fromLaci.id);
-      if (err1) {
-        console.error(err1);
-        return toast.error("Gagal kurangi saldo asal: " + err1.message);
-      }
+      if (err1) return toast.error("Gagal kurangi saldo asal: " + err1.message);
 
       // 2. TAMBAH SALDO TUJUAN
       const { error: err2 } = await supabase.from("laci").update({ saldo: Number(finalTo.saldo||0) + jumlah }).eq("id", finalTo.id);
       if (err2) {
-        console.error(err2);
-        // rollback
         await supabase.from("laci").update({ saldo: fromLaci.saldo }).eq("id", fromLaci.id);
         return toast.error("Gagal tambah saldo tujuan: " + err2.message);
       }
 
-      // 3. SIMPAN RIWAYAT - INI YANG BIKIN MUNCUL DI RIWAYAT
+      // === FIX TAMBAHAN 1: SIMPAN KE laci_mutasi BIAR MUNCUL DI KIRI (Riwayat Bank) ===
+      const { error: errMutasi } = await supabase.from("laci_mutasi").insert({
+        laci_id: fromLaci.id,
+        tipe: "bank_keluar",
+        jumlah: jumlah,
+        keterangan: `TRANSFER ${fromLaci.nama} → ${finalTo.nama} ${isKhusus ? "(AUTO CASH BANK)" : ""}`
+      });
+      if (errMutasi) console.log("laci_mutasi gagal:", errMutasi.message);
+
+      // === FIX TAMBAHAN 2: SIMPAN KE transfer_laci BIAR MUNCUL DI KANAN (Transfer Laci) ===
       const { error: err3 } = await supabase.from("transfer_laci").insert({
         outlet_id: outletId,
         dari_laci_id: fromLaci.id,
@@ -127,8 +128,8 @@ export default function LaciManager({ outletId }) {
       });
       
       if (err3) {
-        console.error("Gagal simpan riwayat:", err3);
-        toast.error("Saldo berhasil tapi riwayat gagal: " + err3.message + " - Jalankan CREATE TABLE transfer_laci!");
+        console.error("transfer_laci GAGAL - INI PENYEBAB 0 x:", err3);
+        toast.error(`Saldo pindah tapi riwayat transfer gagal: ${err3.message}. Jalankan SQL CREATE TABLE transfer_laci!`, { duration: 6000 });
       } else {
         toast.success(`Berhasil! ${fromLaci.nama} → ${finalTo.nama} ${rupiah(jumlah)}`);
       }
