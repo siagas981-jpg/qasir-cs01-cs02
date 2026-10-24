@@ -167,15 +167,14 @@ export default function Transactions() {
     },
   });
 
-  // FIX TRANSFER LACI - SIMPLE TANPA FILTER
-const { data: riwayatLaci = [] } = useQuery({
+  const { data: riwayatlaci = [] } = useQuery({
   queryKey: ["riwayat-laci-test"],
   queryFn: async () => {
     const { data, error } = await supabase
-      .from("transfer_laci")
+      .from("v_riwayat_transfer_wita")
       .select("*")
-      .order("created_at", { ascending: false })
-      .limit(100);
+      .order("jam_utc", { ascending: false })
+      .limit(100)
     console.log("DEBUG transfer_laci RAW:", data);
     console.log("DEBUG transfer_laci ERROR:", error);
     if (error) return [];
