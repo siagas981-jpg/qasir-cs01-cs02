@@ -165,7 +165,12 @@ export default function Transactions() {
       return data || [];
     },
   });
-
+  const formatWita = (iso) => new Date(iso).toLocaleString("id-ID", {
+    timeZone: "Asia/Makassar",
+    day: "2-digit", month: "2-digit", year: "2-digit",
+    hour: "2-digit", minute: "2-digit", second: "2-digit",
+    hour12: false
+  });
   // INI FIX NYA - SEKARANG riwayatLaci SUDAH DI-DEFINISIKAN, TIDAK ERROR LAGI!
   const { data: riwayatLaci = [] } = useQuery({
     queryKey: ["riwayat-laci", dateFilter],
@@ -260,7 +265,7 @@ export default function Transactions() {
                     {riwayatBank.length===0 ? <tr><td colSpan={4} className="p-4 text-center text-slate-400">Tidak ada data bank untuk filter ini - Coba ganti ke Semua Waktu!</td></tr> :
                     riwayatBank.map(r=>(
                       <tr key={r.id} className="border-b hover:bg-slate-50">
-                        <td className="p-2 text-[11px]">{new Date(r.created_at).toLocaleString("id-ID",{timeZone:"Asia/Makassar"})}</td>
+                        <td className="p-2 text-[11px]">{formatWita(r.created_at)}</td>
                         <td className="p-2">{r.keterangan || r.laci_id || "Bank"}<div className="text-[10px] text-slate-400">{r.keterangan || ""}</div></td>
                         <td className={`p-2 font-bold ${(r.tipe||"").toLowerCase().includes("keluar") ? "text-red-600" : "text-green-600"}`}>{r.tipe}</td>
                         <td className="p-2 text-right font-mono">Rp {Number(r.jumlah).toLocaleString("id-ID")}</td>
@@ -278,7 +283,7 @@ export default function Transactions() {
                     {riwayatLaci.length===0 ? <tr><td colSpan={3} className="p-4 text-center text-slate-400">Belum ada transfer. Coba transfer DANA → CASH BANK!</td></tr> :
                     riwayatLaci.map(r=>(
                       <tr key={r.id} className="border-b hover:bg-slate-50">
-                        <td className="p-2 text-[11px]">{new Date(r.created_at).toLocaleString("id-ID",{timeZone:"Asia/Makassar"})}</td>
+                        <td className="p-2 text-[11px]">{formatWita(r.created_at)}</td>
                         <td className="p-2 font-bold">{r.dari_nama || r.dari_laci || "-"} → {r.ke_nama || r.ke_laci || "-"}<div className="text-[10px] text-slate-400 font-normal">{r.keterangan||""}</div><div className="text-[9px] text-slate-400 font-normal">{r.kasir_email||""}</div></td>
                         <td className="p-2 text-right font-mono font-bold">Rp {Number(r.jumlah||0).toLocaleString("id-ID")}</td>
                       </tr>
