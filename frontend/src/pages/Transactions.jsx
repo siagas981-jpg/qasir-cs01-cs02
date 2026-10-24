@@ -4,7 +4,7 @@ import { ChevronDown, Calendar } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/lib/supabase/client";
 import { useAuth } from "@/context/AuthContext";
-import { rupiah, dateTime } from "@/lib/format";
+import { rupiah } from "@/lib/format";
 
 function getWitaParts(d = new Date()) {
   const fmt = new Intl.DateTimeFormat('en-US', { 
@@ -70,11 +70,16 @@ async function fetchTx(outletId, dateFilter) {
 function TxRow({ tx }) {
   const [open, setOpen] = useState(false);
   const hasDiscount = tx.discount && Number(tx.discount) > 0;
+  const formatWitaRow = (iso) => new Date(iso).toLocaleString("id-ID", {
+    timeZone: "Asia/Makassar",
+    day: "2-digit", month: "2-digit", year: "2-digit",
+    hour: "2-digit", minute: "2-digit", hour12: false
+  });
   return (
     <div className="border-b last:border-b-0">
       <button onClick={() => setOpen(!open)} className="w-full grid grid-cols-12 items-center gap-2 px-4 py-3 text-left hover:bg-slate-50 transition-colors">
         <span className="col-span-5 sm:col-span-3 text-sm flex flex-col">
-          <span>{dateTime(tx.created_at)}</span>
+          <span>{formatWitaRow(tx.created_at)}</span>
           {hasDiscount && <span className="mt-1 inline-flex w-fit rounded bg-amber-100 border border-amber-300 px-1.5 py-0.5 text-[10px] font-bold text-amber-800">DISKON {rupiah(tx.discount)}</span>}
         </span>
         <span className="hidden sm:block col-span-3 text-sm text-slate-600 truncate">{tx.outlets?.name}</span>
