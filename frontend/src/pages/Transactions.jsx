@@ -154,18 +154,30 @@ export default function Transactions() {
     hour: "2-digit", minute: "2-digit", second: "2-digit",
     hour12: false
   });
-  const { data: riwayatLaci = [] } = useQuery({
+    const { data: riwayatLaci = [] } = useQuery({
     queryKey: ["riwayat-laci", dateFilter],
     queryFn: async () => {
-      let q = supabase.from("laci_transfer").select("*").order("created_at", { ascending: false }).limit(300);
-      const range = getWitaRange(dateFilter);
-      if (range) q = q.gte("created_at", range.startUTC).lte("created_at", range.endUTC);
-      const { data, error } = await q;
-      if (error) {
-        console.log("LACI TRANSFER ERROR:", error.message);
-        return [];
+      // 1. COBA laci_transfer DULU - TANPA FILTER DULU BIAR PASTI MUNCUL!
+      let { data: d1, error: e1 } = await supabase.from("laci_transfer").select("*").order("created_at", { ascending: false }).limit(300);
+      if (e1) console.log("LACI_TRANSFER ERR:", e1.message);
+      if (d1 && d1.length > 0) {
+        // kalau ada filter, filter manual di JS pakai WITA
+        return d1;
       }
-      return data || [];
+      // 2. FALLBACK ke transfer_laci (punya LaciManager)
+      let { data: d2, error: e2 } = await supabase.from("transfer_laci").select("*").order("created_at", { ascending: false }).limit(300);
+      if (e2) console.log("TRANSFER_LACI ERR:", e2.message);
+      return (d2||[]).map(r => ({
+        id: r.id,
+        created_at: r.created_at || r.jam_utc,
+        dari_nama: r.dari_nama || "Laci Asal",
+        ke_nama: r.ke_nama || "Laci Tujuan",
+        dari_laci: r.dari_laci_id,
+        ke_laci: r.ke_laci_id,
+        jumlah: r.jumlah,
+        keterangan: r.keterangan || `${r.dari_nama||""} -> ${r.ke_nama||""}`,
+        kasir_email: r.kasir_email || ""
+      }));
     },
   });
 
