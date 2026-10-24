@@ -30,48 +30,23 @@ export default function LaciManager({ outletId }) {
   
   const { data: lacis = [] } = useQuery({ queryKey: ["laci-all", outletId], queryFn: () => fetchAllLaci(outletId), enabled: !!outletId });
   
-  // FIX 1 & 2: Baca dari 2 table + pakai outletId yang bener + tanpa filter tanggal yang bikin hilang
+  // FIX BARU: Pakai VIEW v_riwayat_bank_wita biar jam WITA realtime 00:04 TGL 25 sesuai HP
   const { data: riwayatTransfer = [] } = useQuery({
     queryKey: ["transfer-laci", outletId],
     queryFn: async () => {
       if (!outletId) return [];
-      
-      // Ambil outlet_id yang asli dari data laci (biar gak mismatch)
       const realOutletIdForQuery = lacis[0]?.outlet_id || outletId;
 
-      // 1. Ambil dari transfer_laci
-      const { data: dataTransfer, error: errTransfer } = await supabase
-        .from("transfer_laci")
+      // LANGSUNG DARI VIEW WITA - SUDAH ADA jam_wita_text + dari_nama + ke_nama (JOIN laci)
+      const { data, error } = await supabase
+        .from("v_riwayat_bank_wita")
         .select("*")
         .eq("outlet_id", realOutletIdForQuery)
-        .order("created_at", { ascending: false })
+        .order("jam_utc", { ascending: false })
         .limit(50);
       
-      if (errTransfer) throw errTransfer;
-
-      // 2. Ambil juga dari laci_mutasi
-      const { data: dataMutasi, error: errMutasi } = await supabase
-        .from("laci_mutasi")
-        .select("*")
-        .eq("outlet_id", realOutletIdForQuery)
-        .order("created_at", { ascending: false })
-        .limit(50);
-
-      const combined = [
-        ...(dataTransfer || []).map(r => ({ ...r, _source: 'transfer_laci' })),
-        ...(dataMutasi || []).map(r => ({ 
-          id: r.id,
-          dari_nama: r.dari_nama || r.dari_laci_id,
-          ke_nama: r.ke_nama || r.ke_laci_id,
-          jumlah: r.jumlah || r.nominal,
-          created_at: r.created_at,
-          kasir_email: r.kasir_email || '-',
-          _source: 'laci_mutasi'
-        }))
-      ];
-
-      combined.sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
-      return combined.slice(0, 50);
+      if (error) throw error;
+      return data || [];
     },
     enabled: !!outletId && lacis.length > 0
   });
@@ -142,23 +117,21 @@ export default function LaciManager({ outletId }) {
         toast.error("err2 saldo tujuan: " + err2.message); return; 
       }
       const realOutletId = fromLaci.outlet_id || outletId;
+      // FIX: transfer_laci di DB kamu gak ada kolom dari_nama/ke_nama, jadi simpan id saja
       const { error: err3 } = await supabase.from("transfer_laci").insert([{
         outlet_id: realOutletId,
         dari_laci_id: fromLaci.id,
         ke_laci_id: finalTo.id,
-        dari_nama: String(fromLaci.nama),
-        ke_nama: String(finalTo.nama),
         jumlah: Number(jumlah),
         keterangan: `${fromLaci.nama} -> ${finalTo.nama}`,
-        kasir_email: String(profile?.email || "siagas981@gmail.com")
       }]);
       await supabase.from("laci_mutasi").insert([{
         outlet_id: realOutletId,
         dari_laci_id: fromLaci.id,
         ke_laci_id: finalTo.id,
         jumlah: Number(jumlah),
+        tipe: 'transfer',
         keterangan: `${fromLaci.nama} -> ${finalTo.nama}`,
-        kasir_email: String(profile?.email || "siagas981@gmail.com")
       }]);
       if (err3) {
         toast.error("Gagal simpan riwayat: " + err3.message);
@@ -175,8 +148,14 @@ export default function LaciManager({ outletId }) {
     }
   };
 
-  // ===== CUMA INI YANG DIUBAH OWY - FIX JAM WITA SESUAI JAM HP 00:04 TGL 25 =====
-  const formatWita = (utcDate) => {
+  // FIX JAM WITA REALTIME - PAKAI jam_wita_text DARI VIEW
+  const formatWita = (rowOrDate) => {
+    if (!rowOrDate) return '-';
+    // Kalau sudah ada jam_wita_text dari VIEW
+    if (typeof rowOrDate === 'object' && rowOrDate.jam_wita_text) {
+      return rowOrDate.jam_wita_text + ' WITA';
+    }
+    const utcDate = typeof rowOrDate === 'object' ? (rowOrDate.jam_utc || rowOrDate.created_at) : rowOrDate;
     if (!utcDate) return '-';
     return new Date(utcDate).toLocaleString('id-ID', {
       timeZone: 'Asia/Makassar',
@@ -189,7 +168,6 @@ export default function LaciManager({ outletId }) {
       hour12: false
     }) + ' WITA';
   };
-  // ===== SELESAI UBAHAN =====
 
   return (
     <div className="space-y-3">
@@ -225,8 +203,8 @@ export default function LaciManager({ outletId }) {
           {riwayatTransfer.map((r) => (
             <div key={r.id} className="flex justify-between items-center text-[11px] border-b py-1.5">
               <div className="flex flex-col">
-                <span className="font-semibold">{r.dari_nama} → {r.ke_nama} <span className="text-[8px] text-slate-400">({r._source})</span></span>
-                <span className="text-[9px] text-slate-400">{formatWita(r.created_at)} • {r.kasir_email}</span>
+                <span className="font-semibold">{r.dari_nama} → {r.ke_nama}</span>
+                <span className="text-[9px] text-slate-400">{r.jam_wita_text ? r.jam_wita_text + ' WITA' : formatWita(r)} • {r.keterangan}</span>
               </div>
               <span className="font-black">{rupiah(r.jumlah)}</span>
             </div>
