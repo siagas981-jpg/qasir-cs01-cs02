@@ -29,26 +29,71 @@ export default function LaciManager({ outletId }) {
   const [transfer, setTransfer] = useState({ from: "", to: "", amount: 0 });
   
   const { data: lacis = [] } = useQuery({ queryKey: ["laci-all", outletId], queryFn: () => fetchAllLaci(outletId), enabled: !!outletId });
+  
+  // FIX 1 & 2: Baca dari 2 table + pakai outletId yang bener + tanpa filter tanggal yang bikin hilang
   const { data: riwayatTransfer = [] } = useQuery({
     queryKey: ["transfer-laci", outletId],
     queryFn: async () => {
       if (!outletId) return [];
-      const { data, error } = await supabase.from("transfer_laci").select("*").eq("outlet_id", outletId).order("created_at", { ascending: false }).limit(30);
-      if (error) throw error;
-      return data || [];
+      
+      // Ambil outlet_id yang asli dari data laci (biar gak mismatch)
+      const realOutletIdForQuery = lacis[0]?.outlet_id || outletId;
+
+      // 1. Ambil dari transfer_laci
+      const { data: dataTransfer, error: errTransfer } = await supabase
+        .from("transfer_laci")
+        .select("*")
+        .eq("outlet_id", realOutletIdForQuery)
+        .order("created_at", { ascending: false })
+        .limit(50); // naikin jadi 50 biar gak kepotong
+      
+      if (errTransfer) throw errTransfer;
+
+      // 2. Ambil juga dari laci_mutasi (tempat transaksi DANA kamu yang 5 tadi)
+      const { data: dataMutasi, error: errMutasi } = await supabase
+        .from("laci_mutasi")
+        .select("*")
+        .eq("outlet_id", realOutletIdForQuery)
+        .order("created_at", { ascending: false })
+        .limit(50);
+
+      // Gabung 2 riwayat biar semua muncul
+      const combined = [
+        ...(dataTransfer || []).map(r => ({ ...r, _source: 'transfer_laci' })),
+        ...(dataMutasi || []).map(r => ({ 
+          id: r.id,
+          dari_nama: r.dari_nama || r.dari_laci_id,
+          ke_nama: r.ke_nama || r.ke_laci_id,
+          jumlah: r.jumlah || r.nominal,
+          created_at: r.created_at,
+          kasir_email: r.kasir_email || '-',
+          _source: 'laci_mutasi'
+        }))
+      ];
+
+      // Sort manual by tanggal terbaru (pakai UTC asli)
+      combined.sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
+      
+      console.log("DEBUG RIWAYAT GABUNGAN:", combined);
+      return combined.slice(0, 50);
     },
-    enabled: !!outletId
+    enabled: !!outletId && lacis.length > 0
   });
   
   const KHUSUS = ['BRI', 'BNI', 'MANDIRI', 'DANA', 'BUKU AGEN', 'AGEN'];
 
   useEffect(() => {
     if (!outletId) return;
-    const channel = supabase.channel(`laci-${outletId}`).on("postgres_changes", { event: "*", schema: "public", table: "laci", filter: `outlet_id=eq.${outletId}` }, () => {
+    const realId = lacis[0]?.outlet_id || outletId;
+    const channel = supabase.channel(`laci-${realId}`).on("postgres_changes", { event: "*", schema: "public", table: "laci", filter: `outlet_id=eq.${realId}` }, () => {
       qc.invalidateQueries({ queryKey: ["laci-all", outletId] });
+    }).on("postgres_changes", { event: "INSERT", schema: "public", table: "transfer_laci", filter: `outlet_id=eq.${realId}` }, () => {
+      qc.invalidateQueries({ queryKey: ["transfer-laci", outletId] });
+    }).on("postgres_changes", { event: "INSERT", schema: "public", table: "laci_mutasi", filter: `outlet_id=eq.${realId}` }, () => {
+      qc.invalidateQueries({ queryKey: ["transfer-laci", outletId] });
     }).subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, [outletId, qc]);
+  }, [outletId, lacis, qc]);
 
   const handleAdd = async (e) => {
     e.preventDefault();
@@ -99,7 +144,6 @@ export default function LaciManager({ outletId }) {
 
       if (fromLaci.id === finalTo.id) { toast.error("Asal dan tujuan sama!"); return; }
 
-      // UPDATE SALDO
       const { error: err1 } = await supabase.from("laci").update({ saldo: Number(fromLaci.saldo||0) - jumlah }).eq("id", fromLaci.id);
       if (err1) { toast.error("err1 saldo asal: " + err1.message); return; }
 
@@ -109,11 +153,10 @@ export default function LaciManager({ outletId }) {
         toast.error("err2 saldo tujuan: " + err2.message); return; 
       }
 
-      // INSERT RIWAYAT - FIX UTAMA
       const realOutletId = fromLaci.outlet_id || outletId;
-      console.log("DEBUG REAL OUTLET:", realOutletId);
 
-      const { data: insData, error: err3 } = await supabase.from("transfer_laci").insert([{
+      // FIX 3: Insert ke 2 table biar sinkron
+      const { error: err3 } = await supabase.from("transfer_laci").insert([{
         outlet_id: realOutletId,
         dari_laci_id: fromLaci.id,
         ke_laci_id: finalTo.id,
@@ -122,10 +165,17 @@ export default function LaciManager({ outletId }) {
         jumlah: Number(jumlah),
         keterangan: `${fromLaci.nama} -> ${finalTo.nama}`,
         kasir_email: String(profile?.email || "siagas981@gmail.com")
-      }]).select();
+      }]);
 
-      console.log("DEBUG transfer_laci RAW:", insData);
-      console.log("DEBUG transfer_laci ERROR:", err3);
+      // Juga insert ke laci_mutasi biar laporan harian DANA kebaca
+      await supabase.from("laci_mutasi").insert([{
+        outlet_id: realOutletId,
+        dari_laci_id: fromLaci.id,
+        ke_laci_id: finalTo.id,
+        jumlah: Number(jumlah),
+        keterangan: `${fromLaci.nama} -> ${finalTo.nama}`,
+        kasir_email: String(profile?.email || "siagas981@gmail.com")
+      }]);
 
       if (err3) {
         toast.error("Gagal simpan riwayat: " + err3.message);
@@ -141,6 +191,17 @@ export default function LaciManager({ outletId }) {
       console.error(err);
       toast.error("Error: " + err.message);
     }
+  };
+
+  // FIX 4: Format tanggal pakai WITA Makassar
+  const formatWita = (utcDate) => {
+    return new Date(utcDate).toLocaleString('id-ID', {
+      timeZone: 'Asia/Makassar',
+      day: '2-digit',
+      month: 'short',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
   };
 
   return (
@@ -169,16 +230,16 @@ export default function LaciManager({ outletId }) {
 
       <div className="border rounded-lg p-3 bg-white mt-4">
         <div className="flex justify-between items-center mb-2">
-          <p className="font-bold text-[12px]">Riwayat Transfer Laci (30 terbaru) - outlet: {outletId ? outletId.slice(0,8) : 'NO OUTLET'}</p>
+          <p className="font-bold text-[12px]">Riwayat Transfer Laci (50 terbaru) - FIX WITA</p>
           <Button size="sm" variant="outline" className="h-6 text-[10px]" onClick={()=>qc.invalidateQueries({ queryKey: ["transfer-laci", outletId] })}>Refresh</Button>
         </div>
-        <div className="space-y-1 max-h-[300px] overflow-auto">
-          {riwayatTransfer.length === 0 && <p className="text-[11px] text-slate-400 py-4 text-center">Belum ada transfer. Pastikan outletId ada & sudah transfer QRIS→CIP</p>}
+        <div className="space-y-1 max-h-[350px] overflow-auto">
+          {riwayatTransfer.length === 0 && <p className="text-[11px] text-slate-400 py-4 text-center">Belum ada transfer. Cek console log.</p>}
           {riwayatTransfer.map((r) => (
             <div key={r.id} className="flex justify-between items-center text-[11px] border-b py-1.5">
               <div className="flex flex-col">
-                <span className="font-semibold">{r.dari_nama} → {r.ke_nama}</span>
-                <span className="text-[9px] text-slate-400">{new Date(r.created_at).toLocaleString('id-ID')} • {r.kasir_email}</span>
+                <span className="font-semibold">{r.dari_nama} → {r.ke_nama} <span className="text-[8px] text-slate-400">({r._source})</span></span>
+                <span className="text-[9px] text-slate-400">{formatWita(r.created_at)} WITA • {r.kasir_email}</span>
               </div>
               <span className="font-black">{rupiah(r.jumlah)}</span>
             </div>
