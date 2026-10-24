@@ -166,22 +166,6 @@ export default function Transactions() {
       return data || [];
     },
   });
-
-  const { data: riwayatBank = [] } = useQuery({
-  queryKey: ["riwayat-laci-test"],
-  queryFn: async () => {
-    const { data, error } = await supabase
-      .from("v_riwayat_transfer_wita")
-      .select("*")
-      .order("jam_utc", { ascending: false })
-      .limit(100)
-    console.log("DEBUG transfer_laci RAW:", data);
-    console.log("DEBUG transfer_laci ERROR:", error);
-    if (error) return [];
-    return data || [];
-  },
-});
-
   const totalFiltered = data.reduce((s, t) => s + t.total, 0);
   const totalDiskonFiltered = data.reduce((s, t) => s + (Number(t.discount) || 0), 0);
   const months = ["Januari","Februari","Maret","April","Mei","Juni","Juli","Agustus","September","Oktober","November","Desember"];
