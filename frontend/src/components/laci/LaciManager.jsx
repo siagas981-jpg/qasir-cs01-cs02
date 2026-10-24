@@ -134,10 +134,14 @@ export default function LaciManager({ outletId }) {
         keterangan: `${fromLaci.nama} -> ${finalTo.nama}`,
       }]);
       if (err3) {
-        toast.error("Gagal simpan riwayat: " + err3.message);
-      } else {
-        toast.success(`Berhasil ${fromLaci.nama} → ${finalTo.nama} ${rupiah(jumlah)}`);
-      }
+  console.error("ERR3 FULL:", err3);
+  alert("GAGAL INSERT: " + err3.message);
+  toast.error("Gagal simpan riwayat: " + err3.message);
+  return;
+} else {
+  console.log("SUKSES TRANSFER:", fromLaci.nama, "->", finalTo.nama);
+  toast.success(`Berhasil ${fromLaci.nama} -> ${finalTo.nama} ${rupiah(jumlah)}`);
+}
       setOpenTransfer(false);
       setTransfer({ from: "", to: "", amount: 0 });
       qc.invalidateQueries({ queryKey: ["transfer-laci", outletId] });
