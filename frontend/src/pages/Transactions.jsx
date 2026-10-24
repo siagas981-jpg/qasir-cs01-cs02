@@ -167,7 +167,7 @@ export default function Transactions() {
     },
   });
 
-  const { data: riwayatlaci = [] } = useQuery({
+  const { data: riwayatBank = [] } = useQuery({
   queryKey: ["riwayat-laci-test"],
   queryFn: async () => {
     const { data, error } = await supabase
