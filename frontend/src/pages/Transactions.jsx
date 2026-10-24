@@ -151,7 +151,6 @@ export default function Transactions() {
     staleTime: 5_000
   });
 
-  // === FIX 1: HAPUS FILTER outlet_id & HAPUS JOIN laci_id ===
   const { data: riwayatBank = [] } = useQuery({
     queryKey: ["riwayat-bank", dateFilter],
     queryFn: async () => {
@@ -166,12 +165,28 @@ export default function Transactions() {
       return data || [];
     },
   });
+
+  // INI FIX NYA - SEKARANG riwayatLaci SUDAH DI-DEFINISIKAN, TIDAK ERROR LAGI!
+  const { data: riwayatLaci = [] } = useQuery({
+    queryKey: ["riwayat-laci", dateFilter],
+    queryFn: async () => {
+      let q = supabase.from("laci_transfer").select("*").order("created_at", { ascending: false }).limit(300);
+      const range = getWitaRange(dateFilter);
+      if (range) q = q.gte("created_at", range.startUTC).lte("created_at", range.endUTC);
+      const { data, error } = await q;
+      if (error) {
+        console.log("LACI TRANSFER ERROR (wajar kalau tabel belum ada, return kosong):", error.message);
+        return [];
+      }
+      return data || [];
+    },
+  });
+
   const totalFiltered = data.reduce((s, t) => s + t.total, 0);
   const totalDiskonFiltered = data.reduce((s, t) => s + (Number(t.discount) || 0), 0);
   const months = ["Januari","Februari","Maret","April","Mei","Juni","Juli","Agustus","September","Oktober","November","Desember"];
   const years = Array.from({length: 5}, (_, i) => new Date().getFullYear() - i);
   
-  // === FIX 3: HITUNG TOTAL PAKAI includes("masuk") BIAR KENA bank_masuk JUGA ===
   const totalBankMasuk = riwayatBank.filter(r=> (r.tipe||"").toLowerCase().includes("masuk")).reduce((s,r)=>s+Number(r.jumlah||0),0);
   const totalBankKeluar = riwayatBank.filter(r=> (r.tipe||"").toLowerCase().includes("keluar")).reduce((s,r)=>s+Number(r.jumlah||0),0);
 
@@ -256,7 +271,7 @@ export default function Transactions() {
               </div>
             </div>
             <div className="rounded-xl border bg-white p-4">
-              <h3 className="font-bold mb-3">🔁 Riwayat Transfer Antar Laci - BARU</h3>
+              <h3 className="font-bold mb-3">🔁 Riwayat Transfer Antar Laci - FIX</h3>
               <div className="max-h-[700px] overflow-auto text-sm rounded border">
                 <table className="w-full"><thead className="sticky top-0 bg-slate-100"><tr className="border-b text-left text-xs"><th className="p-2">Tgl (WITA)</th><th className="p-2">Dari → Ke</th><th className="p-2 text-right">Jumlah</th></tr></thead>
                   <tbody>
@@ -264,7 +279,7 @@ export default function Transactions() {
                     riwayatLaci.map(r=>(
                       <tr key={r.id} className="border-b hover:bg-slate-50">
                         <td className="p-2 text-[11px]">{new Date(r.created_at).toLocaleString("id-ID",{timeZone:"Asia/Makassar"})}</td>
-                        <td className="p-2 font-bold">{r.dari_nama} → {r.ke_nama}<div className="text-[10px] text-slate-400 font-normal">{r.keterangan||""}</div><div className="text-[9px] text-slate-400 font-normal">{r.kasir_email||""}</div></td>
+                        <td className="p-2 font-bold">{r.dari_nama || r.dari_laci || "-"} → {r.ke_nama || r.ke_laci || "-"}<div className="text-[10px] text-slate-400 font-normal">{r.keterangan||""}</div><div className="text-[9px] text-slate-400 font-normal">{r.kasir_email||""}</div></td>
                         <td className="p-2 text-right font-mono font-bold">Rp {Number(r.jumlah||0).toLocaleString("id-ID")}</td>
                       </tr>
                     ))}
