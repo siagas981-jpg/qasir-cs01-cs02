@@ -9,81 +9,55 @@ import { rupiah, dateTime } from "@/lib/format";
 async function fetchTx(outletId, dateFilter) {
   let q = supabase.from("transactions").select("*, outlets(name), transaction_items(*)").order("created_at", { ascending: false }).limit(200);
   if (outletId !== "all") q = q.eq("outlet_id", outletId);
-  const getWitaDate = (d = new Date()) => new Date(d.toLocaleString("en-US", { timeZone: "Asia/Makassar" }));
-  const toWitaISODate = (d) => {
-    const wita = getWitaDate(d);
-    return `${wita.getFullYear()}-${String(wita.getMonth() + 1).padStart(2, "0")}-${String(wita.getDate()).padStart(2, "0")}`;
-  };
-  if (dateFilter) {
-    const { type, start, end, month, year } = dateFilter;
-    if (type === "hari_ini") {
-      const t = toWitaISODate(new Date());
-      q = q.gte("created_at", new Date(`${t}T00:00:00+08:00`).toISOString()).lte("created_at", new Date(`${t}T23:59:59+08:00`).toISOString());
-    } else if (type === "kemarin") {
-      const d = getWitaDate(new Date()); d.setDate(d.getDate() - 1);
-      const t = toWitaISODate(d);
-      q = q.gte("created_at", new Date(`${t}T00:00:00+08:00`).toISOString()).lte("created_at", new Date(`${t}T23:59:59+08:00`).toISOString());
-    } else if (type === "bulan_ini") {
-      const now = getWitaDate(); const y = now.getFullYear(); const m = now.getMonth();
-      const firstUTC = new Date(`${y}-${String(m+1).padStart(2,'0')}-01T00:00:00+08:00`).toISOString();
-      const lastDay = new Date(y, m+1, 0).getDate();
-      const lastUTC = new Date(`${y}-${String(m+1).padStart(2,'0')}-${lastDay}T23:59:59+08:00`).toISOString();
-      q = q.gte("created_at", firstUTC).lte("created_at", lastUTC);
-    } else if (type === "bulan" && month && year) {
-      const firstUTC = new Date(`${year}-${String(month).padStart(2,'0')}-01T00:00:00+08:00`).toISOString();
-      const lastDay = new Date(year, month, 0).getDate();
-      const lastUTC = new Date(`${year}-${String(month).padStart(2,'0')}-${lastDay}T23:59:59+08:00`).toISOString();
-      q = q.gte("created_at", firstUTC).lte("created_at", lastUTC);
-    } else if (type === "tahun_ini") {
-      const y = getWitaDate().getFullYear();
-      q = q.gte("created_at", new Date(`${y}-01-01T00:00:00+08:00`).toISOString()).lte("created_at", new Date(`${y}-12-31T23:59:59+08:00`).toISOString());
-    } else if (type === "tahun" && year) {
-      q = q.gte("created_at", new Date(`${year}-01-01T00:00:00+08:00`).toISOString()).lte("created_at", new Date(`${year}-12-31T23:59:59+08:00`).toISOString());
-    } else if (type === "custom" && start && end) {
-      q = q.gte("created_at", new Date(`${start}T00:00:00+08:00`).toISOString()).lte("created_at", new Date(`${end}T23:59:59+08:00`).toISOString());
-    }
-  }
+  
   const { data, error } = await q;
   if (error) throw error;
   return data;
 }
 
+function getWitaParts(d = new Date()) {
+  const fmt = new Intl.DateTimeFormat('en-US', { 
+    timeZone: 'Asia/Makassar', 
+    year: 'numeric', month: 'numeric', day: 'numeric',
+    hour: '2-digit', minute: '2-digit', hour12: false
+  });
+  const parts = fmt.formatToParts(d);
+  const get = (t) => parts.find(p=>p.type===t)?.value;
+  return { year: Number(get('year')), month: Number(get('month')), day: Number(get('day')) };
+}
+function getWitaISODate(d = new Date()) {
+  const { year, month, day } = getWitaParts(d);
+  return `${year}-${String(month).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+}
+
 function getWitaRange(dateFilter) {
   if (!dateFilter) return null;
-  const getWitaDate = (d = new Date()) => new Date(d.toLocaleString("en-US", { timeZone: "Asia/Makassar" }));
-  const toWitaISODate = (d) => {
-    const w = getWitaDate(d);
-    return `${w.getFullYear()}-${String(w.getMonth()+1).padStart(2,"0")}-${String(w.getDate()).padStart(2,"0")}`;
-  };
   let startUTC, endUTC;
   if (dateFilter.type === "hari_ini") {
-    const t = toWitaISODate(new Date());
+    const t = getWitaISODate(new Date());
     startUTC = new Date(`${t}T00:00:00+08:00`).toISOString();
     endUTC = new Date(`${t}T23:59:59+08:00`).toISOString();
   } else if (dateFilter.type === "kemarin") {
-    const d = getWitaDate(new Date()); d.setDate(d.getDate()-1);
-    const t = toWitaISODate(d);
+    const dd = new Date(); dd.setDate(dd.getDate()-1);
+    const t = getWitaISODate(dd);
     startUTC = new Date(`${t}T00:00:00+08:00`).toISOString();
     endUTC = new Date(`${t}T23:59:59+08:00`).toISOString();
   } else if (dateFilter.type === "bulan_ini") {
-    const now = getWitaDate(); const y=now.getFullYear(), m=now.getMonth();
-    startUTC = new Date(`${y}-${String(m+1).padStart(2,'0')}-01T00:00:00+08:00`).toISOString();
-    const lastDay = new Date(y, m+1, 0).getDate();
-    endUTC = new Date(`${y}-${String(m+1).padStart(2,'0')}-${lastDay}T23:59:59+08:00`).toISOString();
+    const { year: y, month: m } = getWitaParts(new Date());
+    startUTC = new Date(`${y}-${String(m).padStart(2,'0')}-01T00:00:00+08:00`).toISOString();
+    const lastDay = new Date(y, m, 0).getDate();
+    endUTC = new Date(`${y}-${String(m).padStart(2,'0')}-${lastDay}T23:59:59+08:00`).toISOString();
   } else if (dateFilter.type === "bulan" && dateFilter.month && dateFilter.year) {
     startUTC = new Date(`${dateFilter.year}-${String(dateFilter.month).padStart(2,'0')}-01T00:00:00+08:00`).toISOString();
     const lastDay = new Date(dateFilter.year, dateFilter.month, 0).getDate();
     endUTC = new Date(`${dateFilter.year}-${String(dateFilter.month).padStart(2,'0')}-${lastDay}T23:59:59+08:00`).toISOString();
   } else if (dateFilter.type === "tahun_ini") {
-    const y=getWitaDate().getFullYear();
+    const { year: y } = getWitaParts(new Date());
     startUTC = new Date(`${y}-01-01T00:00:00+08:00`).toISOString();
     endUTC = new Date(`${y}-12-31T23:59:59+08:00`).toISOString();
   } else if (dateFilter.type === "tahun" && dateFilter.year) {
     startUTC = new Date(`${dateFilter.year}-01-01T00:00:00+08:00`).toISOString();
     endUTC = new Date(`${dateFilter.year}-12-31T23:59:59+08:00`).toISOString();
-  } else if (dateFilter.type === "custom" && dateFilter.start && dateFilter.end) {
-    startUTC = new Date(`${dateFilter.start}T00:00:00+08:00`).toISOString();
-    endUTC = new Date(`${dateFilter.end}T23:59:59+08:00`).toISOString();
   }
   if (startUTC && endUTC) return { startUTC, endUTC };
   return null;
