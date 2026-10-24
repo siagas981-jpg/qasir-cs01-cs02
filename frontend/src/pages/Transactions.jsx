@@ -6,20 +6,10 @@ import { supabase } from "@/lib/supabase/client";
 import { useAuth } from "@/context/AuthContext";
 import { rupiah, dateTime } from "@/lib/format";
 
-async function fetchTx(outletId, dateFilter) {
-  let q = supabase.from("transactions").select("*, outlets(name), transaction_items(*)").order("created_at", { ascending: false }).limit(200);
-  if (outletId !== "all") q = q.eq("outlet_id", outletId);
-  
-  const { data, error } = await q;
-  if (error) throw error;
-  return data;
-}
-
 function getWitaParts(d = new Date()) {
   const fmt = new Intl.DateTimeFormat('en-US', { 
     timeZone: 'Asia/Makassar', 
     year: 'numeric', month: 'numeric', day: 'numeric',
-    hour: '2-digit', minute: '2-digit', hour12: false
   });
   const parts = fmt.formatToParts(d);
   const get = (t) => parts.find(p=>p.type===t)?.value;
@@ -29,7 +19,6 @@ function getWitaISODate(d = new Date()) {
   const { year, month, day } = getWitaParts(d);
   return `${year}-${String(month).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
 }
-
 function getWitaRange(dateFilter) {
   if (!dateFilter) return null;
   let startUTC, endUTC;
@@ -58,9 +47,24 @@ function getWitaRange(dateFilter) {
   } else if (dateFilter.type === "tahun" && dateFilter.year) {
     startUTC = new Date(`${dateFilter.year}-01-01T00:00:00+08:00`).toISOString();
     endUTC = new Date(`${dateFilter.year}-12-31T23:59:59+08:00`).toISOString();
+  } else if (dateFilter.type === "custom" && dateFilter.start && dateFilter.end) {
+    startUTC = new Date(`${dateFilter.start}T00:00:00+08:00`).toISOString();
+    endUTC = new Date(`${dateFilter.end}T23:59:59+08:00`).toISOString();
   }
   if (startUTC && endUTC) return { startUTC, endUTC };
   return null;
+}
+
+async function fetchTx(outletId, dateFilter) {
+  let q = supabase.from("transactions").select("*, outlets(name), transaction_items(*)").order("created_at", { ascending: false }).limit(200);
+  if (outletId !== "all") q = q.eq("outlet_id", outletId);
+  const range = getWitaRange(dateFilter);
+  if (range) {
+    q = q.gte("created_at", range.startUTC).lte("created_at", range.endUTC);
+  }
+  const { data, error } = await q;
+  if (error) throw error;
+  return data;
 }
 
 function TxRow({ tx }) {
@@ -106,8 +110,8 @@ export default function Transactions() {
   const [period, setPeriod] = useState("hari_ini");
   const [customStart, setCustomStart] = useState("");
   const [customEnd, setCustomEnd] = useState("");
-  const [filterMonth, setFilterMonth] = useState(String(new Date().toLocaleString("en-US", {timeZone: "Asia/Makassar", month: "numeric"})));
-  const [filterYear, setFilterYear] = useState(String(new Date().toLocaleString("en-US", {timeZone: "Asia/Makassar", year: "numeric"})));
+  const [filterMonth, setFilterMonth] = useState(String(getWitaParts(new Date()).month));
+  const [filterYear, setFilterYear] = useState(String(getWitaParts(new Date()).year));
   const [tabRiwayat, setTabRiwayat] = useState("produk");
 
   const dateFilter = (() => {
@@ -145,7 +149,6 @@ export default function Transactions() {
     hour: "2-digit", minute: "2-digit", second: "2-digit",
     hour12: false
   });
-  // INI FIX NYA - SEKARANG riwayatLaci SUDAH DI-DEFINISIKAN, TIDAK ERROR LAGI!
   const { data: riwayatLaci = [] } = useQuery({
     queryKey: ["riwayat-laci", dateFilter],
     queryFn: async () => {
@@ -154,7 +157,7 @@ export default function Transactions() {
       if (range) q = q.gte("created_at", range.startUTC).lte("created_at", range.endUTC);
       const { data, error } = await q;
       if (error) {
-        console.log("LACI TRANSFER ERROR (wajar kalau tabel belum ada, return kosong):", error.message);
+        console.log("LACI TRANSFER ERROR:", error.message);
         return [];
       }
       return data || [];
@@ -164,7 +167,7 @@ export default function Transactions() {
   const totalFiltered = data.reduce((s, t) => s + t.total, 0);
   const totalDiskonFiltered = data.reduce((s, t) => s + (Number(t.discount) || 0), 0);
   const months = ["Januari","Februari","Maret","April","Mei","Juni","Juli","Agustus","September","Oktober","November","Desember"];
-  const years = Array.from({length: 5}, (_, i) => new Date().getFullYear() - i);
+  const years = Array.from({length: 5}, (_, i) => getWitaParts(new Date()).year - i);
   
   const totalBankMasuk = riwayatBank.filter(r=> (r.tipe||"").toLowerCase().includes("masuk")).reduce((s,r)=>s+Number(r.jumlah||0),0);
   const totalBankKeluar = riwayatBank.filter(r=> (r.tipe||"").toLowerCase().includes("keluar")).reduce((s,r)=>s+Number(r.jumlah||0),0);
