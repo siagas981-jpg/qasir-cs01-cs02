@@ -30,21 +30,17 @@ export default function LaciManager({ outletId }) {
   
   const { data: lacis = [] } = useQuery({ queryKey: ["laci-all", outletId], queryFn: () => fetchAllLaci(outletId), enabled: !!outletId });
   
-  // FIX BARU: Pakai VIEW v_riwayat_bank_wita biar jam WITA realtime 00:04 TGL 25 sesuai HP
   const { data: riwayatTransfer = [] } = useQuery({
     queryKey: ["transfer-laci", outletId],
     queryFn: async () => {
       if (!outletId) return [];
       const realOutletIdForQuery = lacis[0]?.outlet_id || outletId;
-
-      // LANGSUNG DARI VIEW WITA - SUDAH ADA jam_wita_text + dari_nama + ke_nama (JOIN laci)
       const { data, error } = await supabase
-        .from("v_riwayat_bank_wita")
+        .from("v_riwayat_transfer_wita")
         .select("*")
         .eq("outlet_id", realOutletIdForQuery)
         .order("jam_utc", { ascending: false })
         .limit(50);
-      
       if (error) throw error;
       return data || [];
     },
@@ -117,7 +113,6 @@ export default function LaciManager({ outletId }) {
         toast.error("err2 saldo tujuan: " + err2.message); return; 
       }
       const realOutletId = fromLaci.outlet_id || outletId;
-      // FIX: transfer_laci di DB kamu gak ada kolom dari_nama/ke_nama, jadi simpan id saja
       const { error: err3 } = await supabase.from("transfer_laci").insert([{
         outlet_id: realOutletId,
         dari_laci_id: fromLaci.id,
@@ -134,14 +129,12 @@ export default function LaciManager({ outletId }) {
         keterangan: `${fromLaci.nama} -> ${finalTo.nama}`,
       }]);
       if (err3) {
-  console.error("ERR3 FULL:", err3);
-  alert("GAGAL INSERT: " + err3.message);
-  toast.error("Gagal simpan riwayat: " + err3.message);
-  return;
-} else {
-  console.log("SUKSES TRANSFER:", fromLaci.nama, "->", finalTo.nama);
-  toast.success(`Berhasil ${fromLaci.nama} -> ${finalTo.nama} ${rupiah(jumlah)}`);
-}
+        console.error("ERR3 FULL:", err3);
+        toast.error("Gagal simpan riwayat: " + err3.message);
+        return;
+      } else {
+        toast.success(`Berhasil ${fromLaci.nama} -> ${finalTo.nama} ${rupiah(jumlah)}`);
+      }
       setOpenTransfer(false);
       setTransfer({ from: "", to: "", amount: 0 });
       qc.invalidateQueries({ queryKey: ["transfer-laci", outletId] });
@@ -152,10 +145,8 @@ export default function LaciManager({ outletId }) {
     }
   };
 
-  // FIX JAM WITA REALTIME - PAKAI jam_wita_text DARI VIEW
   const formatWita = (rowOrDate) => {
     if (!rowOrDate) return '-';
-    // Kalau sudah ada jam_wita_text dari VIEW
     if (typeof rowOrDate === 'object' && rowOrDate.jam_wita_text) {
       return rowOrDate.jam_wita_text + ' WITA';
     }
@@ -199,7 +190,7 @@ export default function LaciManager({ outletId }) {
 
       <div className="border rounded-lg p-3 bg-white mt-4">
         <div className="flex justify-between items-center mb-2">
-          <p className="font-bold text-[12px]">Riwayat Transfer Laci (50 terbaru) - FIX WITA</p>
+          <p className="font-bold text-[12px]">Riwayat Transfer Laci (50 terbaru) - WITA Makassar</p>
           <Button size="sm" variant="outline" className="h-6 text-[10px]" onClick={()=>qc.invalidateQueries({ queryKey: ["transfer-laci", outletId] })}>Refresh</Button>
         </div>
         <div className="space-y-1 max-h-[350px] overflow-auto">
