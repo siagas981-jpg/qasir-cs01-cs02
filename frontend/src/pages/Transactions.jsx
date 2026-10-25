@@ -66,25 +66,42 @@ export default function Transactions() {
     }
   });
 
-  // FIX FINAL - PAKAI transfer_laci LANGSUNG, BUKAN VIEW!
   const { data: riwayatLaci = [] } = useQuery({
-    queryKey: ["riwayat-laci-wita-fix", dateFilter, masterLaci.length],
-    queryFn: async () => {
-      const range = getWitaRange(dateFilter);
-      let q = supabase.from("transfer_laci").select("*").order("created_at", { ascending: false }).limit(300);
-      if (range) q = q.gte("created_at", range.startUTC).lte("created_at", range.endUTC);
-      const { data, error } = await q;
-      if (error) {
-        console.log("transfer_laci error:", error);
-        return [];
-      }
-      return (data || []).map(r => ({
-        ...r,
-        dari_nama: r.dari_nama || masterLaci.find(l => l.id === r.dari_laci_id)?.nama || r.dari_laci_id?.slice(0,6) || "Laci",
-        ke_nama: r.ke_nama || masterLaci.find(l => l.id === r.ke_laci_id)?.nama || r.ke_laci_id?.slice(0,6) || "Laci",
-      }));
-    },
-  });
+  queryKey: ["riwayat-laci-wita-fix", dateFilter, outletId, masterLaci.length],
+  queryFn: async () => {
+    if (!outletId && masterLaci.length === 0) return [];
+    
+    // Ambil outlet_id yang bener dari masterLaci, bukan dari prop yang kadang kosong
+    const realOutletId = masterLaci[0]?.outlet_id || outletId;
+    if (!realOutletId) return [];
+
+    const range = getWitaRange ? getWitaRange(dateFilter) : null;
+    
+    let q = supabase
+      .from("transfer_laci")
+      .select("*")
+      .eq("outlet_id", realOutletId)
+      .order("created_at", { ascending: false })
+      .limit(300);
+    
+    if (range) {
+      q = q.gte("created_at", range.startUTC).lte("created_at", range.endUTC);
+    }
+    
+    const { data, error } = await q;
+    if (error) {
+      console.error("transfer_laci error:", error);
+      return [];
+    }
+    
+    return (data || []).map(r => ({
+      ...r,
+      dari_nama: r.dari_nama || masterLaci.find(l => l.id === r.dari_laci_id)?.nama || r.dari_laci_id?.slice(0,8) || "Laci",
+      ke_nama: r.ke_nama || masterLaci.find(l => l.id === r.ke_laci_id)?.nama || r.ke_laci_id?.slice(0,8) || "Laci",
+    }));
+  },
+  enabled: !!(masterLaci[0]?.outlet_id || outletId)
+});
 
   const totalMasuk = riwayatBank.filter(r => r.tipe?.includes("masuk")).reduce((a,b) => a + Number(b.jumlah||b.nominal||0), 0);
   const totalKeluar = riwayatBank.filter(r => r.tipe?.includes("keluar")).reduce((a,b) => a + Number(b.jumlah||b.nominal||0), 0);
