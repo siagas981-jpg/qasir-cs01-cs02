@@ -117,14 +117,26 @@ export default function LaciManager({ outletId }) {
       }
       const realOutletId = fromLaci.outlet_id || outletId;
       
-      // 1. simpan ke transfer_laci (untuk LaciManager)
-      await supabase.from("transfer_laci").insert([{
-        outlet_id: realOutletId,
-        dari_laci_id: fromLaci.id,
-        ke_laci_id: finalTo.id,
-        jumlah: Number(jumlah),
-        keterangan: `${fromLaci.nama} -> ${finalTo.nama}`,
-      }]);
+     // 1. simpan ke transfer_laci (untuk LaciManager)
+    await supabase.from("transfer_laci").insert([{
+      outlet_id: realOutletId,
+      dari_laci_id: fromLaci.id,
+      ke_laci_id: finalTo.id,
+      jumlah: Number(jumlah),
+      keterangan: `${fromLaci.nama} -> ${finalTo.nama}`,
+    }]);
+
+    // === FIX BARU - TAMBAHAN INI YANG BIKIN KANAN JADI NAMA BUKAN UUID ===
+    await supabase.from("laci_transfer").insert([{
+      outlet_id: realOutletId,
+      dari_laci_id: fromLaci.id,
+      ke_laci_id: finalTo.id,
+      dari_nama: fromLaci.nama,
+      ke_nama: finalTo.nama,
+      jumlah: Number(jumlah),
+      keterangan: `${fromLaci.nama} -> ${finalTo.nama}`,
+      kasir_email: user?.email || "",
+    }]);
       
       // 2. simpan ke laci_mutasi (untuk Bank)
       await supabase.from("laci_mutasi").insert([{
