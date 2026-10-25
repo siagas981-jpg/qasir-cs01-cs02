@@ -18,21 +18,26 @@ function formatWita(utcDate) {
 }
 
 function getWitaRange(filter) {
-  const nowWita = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Makassar" }));
-  let startWita, endWita;
+  if (filter === "Semua Waktu") return null;
+  
+  // FIX JAM - pakai string WITA yang pasti
+  const witaDateStr = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Makassar" }); // YYYY-MM-DD di Makassar
+  let startWitaStr, endWitaStr;
+
   if (filter === "Hari Ini") {
-    startWita = new Date(nowWita); startWita.setHours(0,0,0,0);
-    endWita = new Date(nowWita); endWita.setHours(23,59,59,999);
+    startWitaStr = `${witaDateStr}T00:00:00+08:00`;
+    endWitaStr = `${witaDateStr}T23:59:59.999+08:00`;
   } else if (filter === "Kemarin") {
-    startWita = new Date(nowWita); startWita.setDate(nowWita.getDate()-1); startWita.setHours(0,0,0,0);
-    endWita = new Date(nowWita); endWita.setDate(nowWita.getDate()-1); endWita.setHours(23,59,59,999);
-  } else {
-    return null;
-  }
-  // WITA UTC+8 -> kurangi 8 jam untuk UTC
+    const kemarin = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Makassar" }));
+    kemarin.setDate(kemarin.getDate() - 1);
+    const kemarinStr = kemarin.toLocaleDateString("en-CA", { timeZone: "Asia/Makassar" });
+    startWitaStr = `${kemarinStr}T00:00:00+08:00`;
+    endWitaStr = `${kemarinStr}T23:59:59.999+08:00`;
+  } else return null;
+
   return {
-    startUTC: new Date(startWita.getTime() - 8*60*60*1000).toISOString(),
-    endUTC: new Date(endWita.getTime() - 8*60*60*1000).toISOString(),
+    startUTC: new Date(startWitaStr).toISOString(),
+    endUTC: new Date(endWitaStr).toISOString(),
   };
 }
 
@@ -51,27 +56,41 @@ export default function Transactions() {
     },
   });
 
+  // MASTER LACI untuk translate UUID jadi nama
+  const { data: masterLaci = [] } = useQuery({
+    queryKey: ["master-laci"],
+    queryFn: async () => {
+      const { data } = await supabase.from("laci").select("id,nama");
+      return data || [];
+    }
+  });
+
   const { data: riwayatLaci = [] } = useQuery({
     queryKey: ["riwayat-laci", dateFilter],
     queryFn: async () => {
       let q = supabase.from("laci_transfer").select("*").order("created_at", { ascending: false }).limit(300);
       const range = getWitaRange(dateFilter);
       if (range) q = q.gte("created_at", range.startUTC).lte("created_at", range.endUTC);
-      const { data: d1, error: e1 } = await q;
+      const { data: d1 } = await q;
       if (d1 && d1.length > 0) return d1;
-      // fallback kalau kosong
+      
+      // fallback kalau laci_transfer masih kosong - translate ID jadi nama
       let q2 = supabase.from("transfer_laci").select("*").order("created_at", { ascending: false }).limit(300);
       if (range) q2 = q2.gte("created_at", range.startUTC).lte("created_at", range.endUTC);
       const { data: d2 } = await q2;
-      return (d2||[]).map(r => ({
-        id: r.id,
-        created_at: r.created_at,
-        dari_nama: r.dari_nama || r.dari_laci_id || "Laci",
-        ke_nama: r.ke_nama || r.ke_laci_id || "Laci",
-        jumlah: r.jumlah,
-        keterangan: r.keterangan,
-        kasir_email: r.kasir_email || ""
-      }));
+      return (d2||[]).map(r => {
+        const dari = masterLaci.find(l => l.id === r.dari_laci_id)?.nama || r.dari_laci_id;
+        const ke = masterLaci.find(l => l.id === r.ke_laci_id)?.nama || r.ke_laci_id;
+        return {
+          id: r.id,
+          created_at: r.created_at,
+          dari_nama: r.dari_nama || dari || "Laci",
+          ke_nama: r.ke_nama || ke || "Laci",
+          jumlah: r.jumlah,
+          keterangan: r.keterangan,
+          kasir_email: r.kasir_email || ""
+        };
+      });
     },
   });
 
