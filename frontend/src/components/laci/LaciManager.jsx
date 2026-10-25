@@ -35,17 +35,16 @@ export default function LaciManager({ outletId }) {
     queryFn: async () => {
       if (!outletId) return [];
       const realOutletIdForQuery = lacis[0]?.outlet_id || outletId;
-      // coba view dulu, kalau gagal fallback ke transfer_laci langsung
+      // LANGSUNG PAKAI transfer_laci, JANGAN VIEW!
       let { data, error } = await supabase
-        .from("v_riwayat_transfer_wita")
+        .from("transfer_laci")
         .select("*")
         .eq("outlet_id", realOutletIdForQuery)
-        .order("jam_utc", { ascending: false })
+        .order("created_at", { ascending: false })
         .limit(50);
       if (error) {
-        const res2 = await supabase.from("transfer_laci").select("*").eq("outlet_id", realOutletIdForQuery).order("created_at", { ascending: false }).limit(50);
-        if (res2.error) return [];
-        return res2.data || [];
+        console.error(error);
+        return [];
       }
       return data || [];
     },
@@ -108,6 +107,10 @@ export default function LaciManager({ outletId }) {
         if (!finalTo) { toast.error("Pilih laci tujuan!"); return; }
       }
       if (fromLaci.id === finalTo.id) { toast.error("Asal dan tujuan sama!"); return; }
+      
+      const realOutletId = fromLaci.outlet_id || outletId;
+
+      // 1. Update saldo
       const { error: err1 } = await supabase.from("laci").update({ saldo: Number(fromLaci.saldo||0) - jumlah }).eq("id", fromLaci.id);
       if (err1) { toast.error("err1 saldo asal: " + err1.message); return; }
       const { error: err2 } = await supabase.from("laci").update({ saldo: Number(finalTo.saldo||0) + jumlah }).eq("id", finalTo.id);
@@ -115,65 +118,37 @@ export default function LaciManager({ outletId }) {
         await supabase.from("laci").update({ saldo: Number(fromLaci.saldo||0) }).eq("id", fromLaci.id);
         toast.error("err2 saldo tujuan: " + err2.message); return; 
       }
-      const realOutletId = fromLaci.outlet_id || outletId;
       
-     // 1. simpan ke transfer_laci (untuk LaciManager)
-    await supabase.from("transfer_laci").insert([{
-      outlet_id: realOutletId,
-      dari_laci_id: fromLaci.id,
-      ke_laci_id: finalTo.id,
-      jumlah: Number(jumlah),
-      keterangan: `${fromLaci.nama} -> ${finalTo.nama}`,
-    }]);
-
-    // === FIX BARU - TAMBAHAN INI YANG BIKIN KANAN JADI NAMA BUKAN UUID ===
-    await supabase.from("laci_transfer").insert([{
-      outlet_id: realOutletId,
-      dari_laci_id: fromLaci.id,
-      ke_laci_id: finalTo.id,
-      dari_nama: fromLaci.nama,
-      ke_nama: finalTo.nama,
-      jumlah: Number(jumlah),
-      keterangan: `${fromLaci.nama} -> ${finalTo.nama}`,
-      kasir_email: user?.email || "",
-    }]);
-      
-      // 2. simpan ke laci_mutasi (untuk Bank)
-      await supabase.from("laci_mutasi").insert([{
+      // 2. SIMPAN KE transfer_laci - INI YANG BIKIN RIWAYAT MUNCUL!
+      const { error: errTransfer } = await supabase.from("transfer_laci").insert([{
         outlet_id: realOutletId,
-        laci_id: fromLaci.id,
-        tipe: 'keluar',
-        jumlah: Number(jumlah),
-        keterangan: `Transfer ${fromLaci.nama} -> ${finalTo.nama}`,
-      }]);
-      await supabase.from("laci_mutasi").insert([{
-        outlet_id: realOutletId,
-        laci_id: finalTo.id,
-        tipe: 'masuk',
-        jumlah: Number(jumlah),
-        keterangan: `Terima dari ${fromLaci.nama}`,
-      }]);
-
-      // 3. INI YANG BIKIN KANAN MUNCUL DI TRANSACTIONS - INSERT KE laci_transfer!
-      const { error: errLaciTransfer } = await supabase.from("laci_transfer").insert([{
-        dari_laci: fromLaci.id,
-        ke_laci: finalTo.id,
+        dari_laci_id: fromLaci.id,
+        ke_laci_id: finalTo.id,
         dari_nama: fromLaci.nama,
         ke_nama: finalTo.nama,
         jumlah: Number(jumlah),
         keterangan: `${fromLaci.nama} -> ${finalTo.nama}`,
         kasir_email: user?.email || profile?.email || "",
-        outlet_id: realOutletId,
       }]);
-      if (errLaciTransfer) {
-        console.log("laci_transfer error (tapi transfer utama sudah sukses):", errLaciTransfer.message);
+      
+      if (errTransfer) {
+        toast.error("Gagal simpan riwayat transfer: " + errTransfer.message);
+        console.error(errTransfer);
+        return;
       }
+
+      // 3. Simpan ke laci_mutasi untuk saldo bank
+      await supabase.from("laci_mutasi").insert([
+        { outlet_id: realOutletId, laci_id: fromLaci.id, tipe: 'keluar', jumlah: Number(jumlah), keterangan: `Transfer ${fromLaci.nama} -> ${finalTo.nama}` },
+        { outlet_id: realOutletId, laci_id: finalTo.id, tipe: 'masuk', jumlah: Number(jumlah), keterangan: `Terima dari ${fromLaci.nama}` }
+      ]);
 
       toast.success(`Berhasil ${fromLaci.nama} -> ${finalTo.nama} ${rupiah(jumlah)}`);
       setOpenTransfer(false);
       setTransfer({ from: "", to: "", amount: 0 });
       qc.invalidateQueries({ queryKey: ["transfer-laci", outletId] });
       qc.invalidateQueries({ queryKey: ["riwayat-laci"] });
+      qc.invalidateQueries({ queryKey: ["riwayat-laci-wita-fix"] });
       qc.invalidateQueries({ queryKey: ["riwayat-bank"] });
       qc.invalidateQueries({ queryKey: ["laci-all", outletId] });
     } catch (err) {
@@ -181,7 +156,6 @@ export default function LaciManager({ outletId }) {
       toast.error("Error: " + err.message);
     }
   };
-
   const formatWita = (rowOrDate) => {
     if (!rowOrDate) return '-';
     if (typeof rowOrDate === 'object' && rowOrDate.jam_wita_text) {
