@@ -35,7 +35,6 @@ export default function LaciManager({ outletId }) {
     queryFn: async () => {
       if (!outletId) return [];
       const realOutletIdForQuery = lacis[0]?.outlet_id || outletId;
-      // LANGSUNG PAKAI transfer_laci, JANGAN VIEW!
       let { data, error } = await supabase
         .from("transfer_laci")
         .select("*")
@@ -50,8 +49,6 @@ export default function LaciManager({ outletId }) {
     },
     enabled: !!outletId
   });
-  
-  const KHUSUS = ['BRI', 'BNI', 'MANDIRI', 'DANA', 'BUKU AGEN', 'AGEN', 'GADAI HP', 'QRIS', 'GADAI'];
 
   useEffect(() => {
     if (!outletId) return;
@@ -93,33 +90,26 @@ export default function LaciManager({ outletId }) {
     e.preventDefault();
     try {
       const fromLaci = lacis.find(l => l.id === transfer.from);
+      const finalTo = lacis.find(l => l.id === transfer.to);
+      
       if (!fromLaci) { toast.error("Pilih laci asal!"); return; }
-      const jumlah = Number(transfer.amount) || 0;
-      if (jumlah <= 0) { toast.error("Jumlah harus > 0"); return; }
-      const namaFromUpper = (fromLaci.nama || "").toUpperCase();
-      const isKhusus = KHUSUS.some(k => namaFromUpper.includes(k));
-      const cashBankLaci = lacis.find(l => (l.nama||"").toUpperCase().includes("CASH") && (l.nama||"").toUpperCase().includes("BANK"));
-      let finalTo = lacis.find(l => l.id === transfer.to);
-      if (isKhusus) {
-        if (!cashBankLaci) { toast.error("CASH BANK tidak ketemu! Buat dulu laci CASH BANK"); return; }
-        finalTo = cashBankLaci;
-      } else {
-        if (!finalTo) { toast.error("Pilih laci tujuan!"); return; }
-      }
+      if (!finalTo) { toast.error("Pilih laci tujuan!"); return; }
       if (fromLaci.id === finalTo.id) { toast.error("Asal dan tujuan sama!"); return; }
       
+      const jumlah = Number(transfer.amount) || 0;
+      if (jumlah <= 0) { toast.error("Jumlah harus > 0"); return; }
+
       const realOutletId = fromLaci.outlet_id || outletId;
 
-      // 1. Update saldo
       const { error: err1 } = await supabase.from("laci").update({ saldo: Number(fromLaci.saldo||0) - jumlah }).eq("id", fromLaci.id);
-      if (err1) { toast.error("err1 saldo asal: " + err1.message); return; }
+      if (err1) { toast.error("err1: " + err1.message); return; }
+      
       const { error: err2 } = await supabase.from("laci").update({ saldo: Number(finalTo.saldo||0) + jumlah }).eq("id", finalTo.id);
       if (err2) { 
         await supabase.from("laci").update({ saldo: Number(fromLaci.saldo||0) }).eq("id", fromLaci.id);
-        toast.error("err2 saldo tujuan: " + err2.message); return; 
+        toast.error("err2: " + err2.message); return; 
       }
       
-      // 2. SIMPAN KE transfer_laci - INI YANG BIKIN RIWAYAT MUNCUL!
       const { error: errTransfer } = await supabase.from("transfer_laci").insert([{
         outlet_id: realOutletId,
         dari_laci_id: fromLaci.id,
@@ -127,17 +117,13 @@ export default function LaciManager({ outletId }) {
         dari_nama: fromLaci.nama,
         ke_nama: finalTo.nama,
         jumlah: Number(jumlah),
-        keterangan: `${fromLaci.nama} -> ${finalTo.nama}`,
-        kasir_email: user?.email || profile?.email || "",
       }]);
       
       if (errTransfer) {
-        toast.error("Gagal simpan riwayat transfer: " + errTransfer.message);
-        console.error(errTransfer);
+        toast.error("Gagal simpan riwayat: " + errTransfer.message);
         return;
       }
 
-      // 3. Simpan ke laci_mutasi untuk saldo bank
       await supabase.from("laci_mutasi").insert([
         { outlet_id: realOutletId, laci_id: fromLaci.id, tipe: 'keluar', jumlah: Number(jumlah), keterangan: `Transfer ${fromLaci.nama} -> ${finalTo.nama}` },
         { outlet_id: realOutletId, laci_id: finalTo.id, tipe: 'masuk', jumlah: Number(jumlah), keterangan: `Terima dari ${fromLaci.nama}` }
@@ -147,7 +133,6 @@ export default function LaciManager({ outletId }) {
       setOpenTransfer(false);
       setTransfer({ from: "", to: "", amount: 0 });
       qc.invalidateQueries({ queryKey: ["transfer-laci", outletId] });
-      qc.invalidateQueries({ queryKey: ["riwayat-laci"] });
       qc.invalidateQueries({ queryKey: ["riwayat-laci-wita-fix"] });
       qc.invalidateQueries({ queryKey: ["riwayat-bank"] });
       qc.invalidateQueries({ queryKey: ["laci-all", outletId] });
@@ -156,6 +141,7 @@ export default function LaciManager({ outletId }) {
       toast.error("Error: " + err.message);
     }
   };
+
   const formatWita = (rowOrDate) => {
     if (!rowOrDate) return '-';
     if (typeof rowOrDate === 'object' && rowOrDate.jam_wita_text) {
@@ -210,7 +196,7 @@ export default function LaciManager({ outletId }) {
             <div key={r.id} className="flex justify-between items-center text-[11px] border-b py-1.5">
               <div className="flex flex-col">
                 <span className="font-semibold">{r.dari_nama || r.dari_laci_id} → {r.ke_nama || r.ke_laci_id}</span>
-                <span className="text-[9px] text-slate-400">{r.jam_wita_text ? r.jam_wita_text + ' WITA' : formatWita(r)} • {r.keterangan}</span>
+                <span className="text-[9px] text-slate-400">{formatWita(r)} • {r.keterangan || ''}</span>
               </div>
               <span className="font-black">{rupiah(r.jumlah)}</span>
             </div>
@@ -225,15 +211,15 @@ export default function LaciManager({ outletId }) {
 
       <Dialog open={openAdd} onOpenChange={setOpenAdd}><DialogContent className="bg-white"><DialogHeader><DialogTitle>Tambah Laci</DialogTitle></DialogHeader><form onSubmit={handleAdd} className="space-y-3"><Input value={form.kode} onChange={e=>setForm({...form, kode: e.target.value})} placeholder="Kode" className="h-8" /><Input value={form.nama} onChange={e=>setForm({...form, nama: e.target.value})} placeholder="Nama" className="h-8" /><Input value={rupiah(form.saldo)} onChange={e=>setForm({...form, saldo: parseRupiah(e.target.value)})} className="h-8" /><Button type="submit" className="w-full bg-black text-white">Simpan</Button></form></DialogContent></Dialog>
       
-      <Dialog open={openTransfer} onOpenChange={setOpenTransfer}><DialogContent className="bg-white"><DialogHeader><DialogTitle>Transfer / Transaksi Keluar</DialogTitle>
-        <p className="text-[11px] text-slate-500">Jika pilih BRI/BNI/MANDIRI/DANA/BUKU AGEN/GADAI HP/QRIS, otomatis masuk ke CASH BANK.</p>
+      <Dialog open={openTransfer} onOpenChange={setOpenTransfer}><DialogContent className="bg-white"><DialogHeader><DialogTitle>Transfer Laci (Bebas)</DialogTitle>
+        <p className="text-[11px] text-slate-500">Pilih dari dan ke laci mana saja, saldo akan pindah.</p>
       </DialogHeader>
       <form onSubmit={handleTransfer} className="space-y-3">
-        <div><Label className="text-xs">Dari (Sumber Keluar)</Label>
+        <div><Label className="text-xs">Dari</Label>
         <Select value={transfer.from} onValueChange={v=>setTransfer({...transfer, from: v})}><SelectTrigger><SelectValue placeholder="Dari"/></SelectTrigger><SelectContent>{lacis.map(l=><SelectItem key={l.id} value={l.id}>{l.nama} - {rupiah(l.saldo||0)}</SelectItem>)}</SelectContent></Select></div>
-        <div><Label className="text-xs">Ke (Jika bukan 5 bank khusus)</Label>
+        <div><Label className="text-xs">Ke</Label>
         <Select value={transfer.to} onValueChange={v=>setTransfer({...transfer, to: v})}><SelectTrigger><SelectValue placeholder="Ke"/></SelectTrigger><SelectContent>{lacis.map(l=><SelectItem key={l.id} value={l.id}>{l.nama}</SelectItem>)}</SelectContent></Select></div>
-        <div><Label className="text-xs">Jumlah Keluar</Label><Input value={rupiah(transfer.amount)} onChange={e=>setTransfer({...transfer, amount: parseRupiah(e.target.value)})} /></div>
+        <div><Label className="text-xs">Jumlah</Label><Input value={rupiah(transfer.amount)} onChange={e=>setTransfer({...transfer, amount: parseRupiah(e.target.value)})} /></div>
         <Button type="submit" className="w-full bg-blue-600">Proses Transfer</Button>
       </form></DialogContent></Dialog>
     </div>
