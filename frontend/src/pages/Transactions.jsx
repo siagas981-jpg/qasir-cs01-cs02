@@ -44,7 +44,7 @@ function getWitaRange(filter) {
 }
 
 export default function Transactions() {
-  const [dateFilter, setDateFilter] = useState("Hari Ini");
+  const [dateFilter, setDateFilter] = useState("Semua Waktu");
 
   const { data: riwayatBank = [] } = useQuery({
     queryKey: ["riwayat-bank", dateFilter],
@@ -58,43 +58,52 @@ export default function Transactions() {
     },
   });
 
+  // FIX: HARUS ADA outlet_id!
   const { data: masterLaci = [] } = useQuery({
     queryKey: ["master-laci"],
     queryFn: async () => {
-      const { data } = await supabase.from("laci").select("id,nama");
+      const { data } = await supabase.from("laci").select("id,nama,outlet_id");
       return data || [];
     }
   });
 
+  // FIX SEMENTARA: TANPA FILTER WITA UNTUK TRANSFER LACI
   const { data: riwayatLaci = [] } = useQuery({
-  queryKey: ["riwayat-laci-wita-fix", dateFilter, masterLaci.length],
-  queryFn: async () => {
-    if (masterLaci.length === 0) return [];
-    
-    const realOutletId = masterLaci[0]?.outlet_id;
-    if (!realOutletId) return [];
+    queryKey: ["riwayat-laci-wita-fix", dateFilter, masterLaci.length],
+    queryFn: async () => {
+      if (masterLaci.length === 0) return [];
+      
+      const realOutletId = masterLaci[0]?.outlet_id;
+      
+      let q = supabase
+        .from("transfer_laci")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .limit(300);
 
-    let q = supabase
-      .from("transfer_laci")
-      .select("*")
-      .eq("outlet_id", realOutletId)
-      .order("created_at", { ascending: false })
-      .limit(300);
+      // Filter outlet_id kalau ada
+      if (realOutletId) {
+        q = q.eq("outlet_id", realOutletId);
+      }
+
+      // SEMENTARA: TANPA FILTER TANGGAL DULU BIAR MUNCUL!
+      // const range = getWitaRange(dateFilter);
+      // if (range) q = q.gte("created_at", range.startUTC).lte("created_at", range.endUTC);
     
-    const { data, error } = await q;
-    if (error) {
-      console.error("transfer_laci error:", error);
-      return [];
-    }
-    
-    return (data || []).map(r => ({
-      ...r,
-      dari_nama: r.dari_nama || masterLaci.find(l => l.id === r.dari_laci_id)?.nama || "Laci",
-      ke_nama: r.ke_nama || masterLaci.find(l => l.id === r.ke_laci_id)?.nama || "Laci",
-    }));
-  },
-  enabled: masterLaci.length > 0
-});
+      const { data, error } = await q;
+      if (error) {
+        console.error("transfer_laci error:", error);
+        return [];
+      }
+      
+      return (data || []).map(r => ({
+        ...r,
+        dari_nama: r.dari_nama || masterLaci.find(l => l.id === r.dari_laci_id)?.nama || r.dari_laci_id?.slice(0,4) || "Laci",
+        ke_nama: r.ke_nama || masterLaci.find(l => l.id === r.ke_laci_id)?.nama || r.ke_laci_id?.slice(0,4) || "Laci",
+      }));
+    },
+    enabled: masterLaci.length > 0
+  });
 
   const totalMasuk = riwayatBank.filter(r => r.tipe?.includes("masuk")).reduce((a,b) => a + Number(b.jumlah||b.nominal||0), 0);
   const totalKeluar = riwayatBank.filter(r => r.tipe?.includes("keluar")).reduce((a,b) => a + Number(b.jumlah||b.nominal||0), 0);
@@ -108,6 +117,7 @@ export default function Transactions() {
           <option>Kemarin</option>
           <option>Semua Waktu</option>
         </select>
+        <span className="text-[10px] text-slate-400">Sementara tanpa filter tanggal untuk transfer laci</span>
       </div>
       <div className="grid grid-cols-4 gap-3">
         <div className="border rounded p-3 bg-white"><p className="text-[10px]">Total Bank Masuk (Filter)</p><p className="font-bold text-green-600">{rupiah(totalMasuk)}</p></div>
@@ -134,19 +144,19 @@ export default function Transactions() {
           </div>
         </div>
         <div className="border rounded bg-white p-3">
-          <p className="font-bold text-sm mb-2">Riwayat Transfer Antar Laci - WITA FIX</p>
+          <p className="font-bold text-sm mb-2">Riwayat Transfer Antar Laci - FIX (Tanpa Filter)</p>
           <div className="space-y-1 max-h-[500px] overflow-auto text-[11px]">
             {riwayatLaci.map(r => (
               <div key={r.id} className="flex justify-between border-b py-1.5">
                 <div>
                   <p className="font-mono text-[10px]">{formatWita(r.created_at)} WITA</p>
                   <p className="font-bold">{r.dari_nama} → {r.ke_nama}</p>
-                  <p className="text-[9px] text-slate-400">{r.keterangan} • {r.kasir_email || r.email}</p>
+                  <p className="text-[9px] text-slate-400">{r.keterangan || ''} • {r.kasir_email || ''}</p>
                 </div>
                 <p className="font-black">{rupiah(r.jumlah || r.nominal)}</p>
               </div>
             ))}
-            {riwayatLaci.length===0 && <p className="text-center text-slate-400 py-4">Belum ada data</p>}
+            {riwayatLaci.length===0 && <p className="text-center text-slate-400 py-4">Belum ada data - cek console</p>}
           </div>
         </div>
       </div>
