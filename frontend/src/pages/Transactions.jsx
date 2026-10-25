@@ -66,26 +66,22 @@ export default function Transactions() {
     }
   });
 
-    const { data: riwayatLaci = [] } = useQuery({
-    queryKey: ["riwayat-laci", dateFilter, masterLaci.length],
+  // FIX FINAL - PAKAI transfer_laci LANGSUNG, BUKAN VIEW!
+  const { data: riwayatLaci = [] } = useQuery({
+    queryKey: ["riwayat-laci-wita-fix", dateFilter, masterLaci.length],
     queryFn: async () => {
-      // PAKAI VIEW YANG SUDAH WITA!
-      let q = supabase.from("v_riwayat_transfer_wita").select("*").order("created_at", { ascending: false }).limit(300);
       const range = getWitaRange(dateFilter);
+      let q = supabase.from("transfer_laci").select("*").order("created_at", { ascending: false }).limit(300);
       if (range) q = q.gte("created_at", range.startUTC).lte("created_at", range.endUTC);
       const { data, error } = await q;
       if (error) {
-        console.log("view error, fallback ke tabel:", error);
-        // fallback kalau view error
-        let q1 = supabase.from("transfer_laci").select("*").order("created_at", { ascending: false }).limit(300);
-        if (range) q1 = q1.gte("created_at", range.startUTC).lte("created_at", range.endUTC);
-        const { data: d1 } = await q1;
-        return d1 || [];
+        console.log("transfer_laci error:", error);
+        return [];
       }
       return (data || []).map(r => ({
         ...r,
-        dari_nama: r.dari_nama || masterLaci.find(l => l.id === r.dari_laci_id)?.nama || "Laci",
-        ke_nama: r.ke_nama || masterLaci.find(l => l.id === r.ke_laci_id)?.nama || "Laci",
+        dari_nama: r.dari_nama || masterLaci.find(l => l.id === r.dari_laci_id)?.nama || r.dari_laci_id?.slice(0,6) || "Laci",
+        ke_nama: r.ke_nama || masterLaci.find(l => l.id === r.ke_laci_id)?.nama || r.ke_laci_id?.slice(0,6) || "Laci",
       }));
     },
   });
