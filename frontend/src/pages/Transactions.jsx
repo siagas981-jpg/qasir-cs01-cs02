@@ -66,38 +66,27 @@ export default function Transactions() {
     }
   });
 
-  const { data: riwayatLaci = [] } = useQuery({
+    const { data: riwayatLaci = [] } = useQuery({
     queryKey: ["riwayat-laci", dateFilter, masterLaci.length],
     queryFn: async () => {
+      // PAKAI VIEW YANG SUDAH WITA!
+      let q = supabase.from("v_riwayat_transfer_wita").select("*").order("created_at", { ascending: false }).limit(300);
       const range = getWitaRange(dateFilter);
-      const fetchTable = async (tableName) => {
-        try {
-          let q = supabase.from(tableName).select("*").order("created_at", { ascending: false }).limit(300);
-          if (range) q = q.gte("created_at", range.startUTC).lte("created_at", range.endUTC);
-          const { data, error } = await q;
-          if (error) return [];
-          return data || [];
-        } catch { return []; }
-      };
-      const [d1, d2, d3, d4] = await Promise.all([
-        fetchTable("laci_transfer"),
-        fetchTable("transfer_laci"),
-        fetchTable("laci_transfer_keluar"),
-        fetchTable("laci_transfer_masuk"),
-      ]);
-      const all = [...d1, ...d2, ...d3, ...d4];
-      const unique = Array.from(new Map(all.map(i => [i.id, i])).values());
-      return unique.map(r => {
-        const dariId = r.dari_laci_id || r.laci_dari_id;
-        const keId = r.ke_laci_id || r.laci_ke_id;
-        const dariMaster = masterLaci.find(l => l.id === dariId)?.nama;
-        const keMaster = masterLaci.find(l => l.id === keId)?.nama;
-        return {
-          ...r,
-          dari_nama: r.dari_nama || dariMaster || "Laci",
-          ke_nama: r.ke_nama || keMaster || "Laci",
-        };
-      }).sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
+      if (range) q = q.gte("created_at", range.startUTC).lte("created_at", range.endUTC);
+      const { data, error } = await q;
+      if (error) {
+        console.log("view error, fallback ke tabel:", error);
+        // fallback kalau view error
+        let q1 = supabase.from("transfer_laci").select("*").order("created_at", { ascending: false }).limit(300);
+        if (range) q1 = q1.gte("created_at", range.startUTC).lte("created_at", range.endUTC);
+        const { data: d1 } = await q1;
+        return d1 || [];
+      }
+      return (data || []).map(r => ({
+        ...r,
+        dari_nama: r.dari_nama || masterLaci.find(l => l.id === r.dari_laci_id)?.nama || "Laci",
+        ke_nama: r.ke_nama || masterLaci.find(l => l.id === r.ke_laci_id)?.nama || "Laci",
+      }));
     },
   });
 
