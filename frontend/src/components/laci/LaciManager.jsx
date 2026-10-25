@@ -31,13 +31,15 @@ export default function LaciManager({ outletId }) {
   const { data: lacis = [] } = useQuery({ queryKey: ["laci-all", outletId], queryFn: () => fetchAllLaci(outletId), enabled: !!outletId });
   
   const { data: riwayatTransfer = [] } = useQuery({
-    queryKey: ["transfer-laci", outletId],
+    queryKey: ["transfer-laci"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("transfer_laci").select("*").order("created_at", { ascending: false }).limit(50);
-      if (error) return [];
+      const { data, error } = await supabase.from("transfer_laci").select("*").order("created_at", { ascending: false }).limit(100);
+      if (error) {
+        console.error(error);
+        return [];
+      }
       return data || [];
     },
-    enabled: !!outletId
   });
 
   const handleAdd = async (e) => {
@@ -47,7 +49,7 @@ export default function LaciManager({ outletId }) {
     toast.success(`${form.nama} berhasil!`);
     setOpenAdd(false);
     setForm({ kode: "", nama: "", jenis: "CASH", saldo: 0 });
-    qc.invalidateQueries();
+    qc.invalidateQueries({ queryKey: ["laci-all"] });
   };
 
   const handleEditFull = async () => {
@@ -56,7 +58,7 @@ export default function LaciManager({ outletId }) {
     if (error) return toast.error(error.message);
     toast.success(`Berhasil diupdate`);
     setOpenEdit(null);
-    qc.invalidateQueries();
+    qc.invalidateQueries({ queryKey: ["laci-all"] });
   };
 
   const handleDelete = async (laci) => {
@@ -64,7 +66,7 @@ export default function LaciManager({ outletId }) {
     const { error } = await supabase.from("laci").delete().eq("id", laci.id);
     if (error) return toast.error(error.message);
     toast.success(`Dihapus`);
-    qc.invalidateQueries();
+    qc.invalidateQueries({ queryKey: ["laci-all"] });
   };
 
   const handleTransfer = async (e) => {
@@ -77,7 +79,7 @@ export default function LaciManager({ outletId }) {
       const jumlah = Number(transfer.amount) || 0;
       if (jumlah <= 0) return toast.error("Jumlah 0!");
 
-      // INSERT SAMA PERSIS KAYAK TEST MANUAL YANG SUKSES DI FOTO KAMU!
+      // INSERT FINAL - SAMA PERSIS KAYAK YANG SUKSES DI SQL KAMU
       const { data, error: errTransfer } = await supabase.from("transfer_laci").insert({
         dari_nama: fromLaci.nama,
         ke_nama: finalTo.nama,
@@ -86,18 +88,21 @@ export default function LaciManager({ outletId }) {
       }).select();
       
       if (errTransfer) {
-        toast.error("GAGAL: " + errTransfer.message);
+        console.error("GAGAL INSERT:", errTransfer);
+        toast.error("GAGAL: " + errTransfer.message + " | " + errTransfer.details);
         return;
       }
 
-      // Baru update saldo
+      console.log("BERHASIL INSERT:", data);
+
       await supabase.from("laci").update({ saldo: Number(fromLaci.saldo||0) - jumlah }).eq("id", fromLaci.id);
       await supabase.from("laci").update({ saldo: Number(finalTo.saldo||0) + jumlah }).eq("id", finalTo.id);
 
-      toast.success(`Berhasil ${fromLaci.nama} -> ${finalTo.nama} ${rupiah(jumlah)}`);
+      toast.success(`Berhasil ${fromLaci.nama} → ${finalTo.nama} ${rupiah(jumlah)}`);
       setOpenTransfer(false);
       setTransfer({ from: "", to: "", amount: 0 });
-      qc.invalidateQueries();
+      qc.invalidateQueries({ queryKey: ["laci-all"] });
+      qc.invalidateQueries({ queryKey: ["transfer-laci"] });
     } catch (err) {
       toast.error("ERROR: " + err.message);
     }
@@ -133,7 +138,7 @@ export default function LaciManager({ outletId }) {
         ))}
       </div>
       <div className="border rounded-lg p-3 bg-white mt-4">
-        <div className="flex justify-between items-center mb-2"><p className="font-bold text-[12px]">Riwayat Transfer Laci ({riwayatTransfer.length}x)</p><Button size="sm" variant="outline" className="h-6 text-[10px]" onClick={()=>qc.invalidateQueries()}>Refresh</Button></div>
+        <div className="flex justify-between items-center mb-2"><p className="font-bold text-[12px]">Riwayat Transfer Laci ({riwayatTransfer.length}x)</p><Button size="sm" variant="outline" className="h-6 text-[10px]" onClick={()=>qc.invalidateQueries({ queryKey: ["transfer-laci"] })}>Refresh</Button></div>
         <div className="space-y-1 max-h-[350px] overflow-auto">
           {riwayatTransfer.length === 0 && <p className="text-[11px] text-slate-400">Belum ada transfer</p>}
           {riwayatTransfer.map((r) => (
