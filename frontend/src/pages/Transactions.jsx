@@ -65,32 +65,32 @@ export default function Transactions() {
     }
   });
 
-  const { data: riwayatLaci = [] } = useQuery({
-    queryKey: ["riwayat-laci", dateFilter],
+    const { data: riwayatLaci = [] } = useQuery({
+    queryKey: ["riwayat-laci", dateFilter, masterLaci.length],
     queryFn: async () => {
-      let q = supabase.from("laci_transfer").select("*").order("created_at", { ascending: false }).limit(300);
       const range = getWitaRange(dateFilter);
-      if (range) q = q.gte("created_at", range.startUTC).lte("created_at", range.endUTC);
-      const { data: d1 } = await q;
-      if (d1 && d1.length > 0) return d1;
       
-      // fallback kalau laci_transfer masih kosong - translate ID jadi nama
+      let q1 = supabase.from("laci_transfer").select("*").order("created_at", { ascending: false }).limit(300);
+      if (range) q1 = q1.gte("created_at", range.startUTC).lte("created_at", range.endUTC);
+      const { data: d1 } = await q1;
+
       let q2 = supabase.from("transfer_laci").select("*").order("created_at", { ascending: false }).limit(300);
       if (range) q2 = q2.gte("created_at", range.startUTC).lte("created_at", range.endUTC);
       const { data: d2 } = await q2;
-      return (d2||[]).map(r => {
-        const dari = masterLaci.find(l => l.id === r.dari_laci_id)?.nama || r.dari_laci_id;
-        const ke = masterLaci.find(l => l.id === r.ke_laci_id)?.nama || r.ke_laci_id;
+
+      const all = [...(d1||[]), ...(d2||[])];
+      
+      return all.map(r => {
+        const dariId = r.dari_laci_id;
+        const keId = r.ke_laci_id;
+        const dariMaster = masterLaci.find(l => l.id === dariId)?.nama;
+        const keMaster = masterLaci.find(l => l.id === keId)?.nama;
         return {
-          id: r.id,
-          created_at: r.created_at,
-          dari_nama: r.dari_nama || dari || "Laci",
-          ke_nama: r.ke_nama || ke || "Laci",
-          jumlah: r.jumlah,
-          keterangan: r.keterangan,
-          kasir_email: r.kasir_email || ""
+          ...r,
+          dari_nama: r.dari_nama || dariMaster || "Laci",
+          ke_nama: r.ke_nama || keMaster || "Laci",
         };
-      });
+      }).sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
     },
   });
 
