@@ -48,7 +48,7 @@ export default function LaciManager({ outletId }) {
       }
       return data || [];
     },
-    enabled: !!outletId && lacis.length > 0
+    enabled: !!outletId
   });
   
   const KHUSUS = ['BRI', 'BNI', 'MANDIRI', 'DANA', 'BUKU AGEN', 'AGEN', 'GADAI HP', 'QRIS', 'GADAI'];
