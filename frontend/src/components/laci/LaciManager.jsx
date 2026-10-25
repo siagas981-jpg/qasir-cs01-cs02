@@ -101,6 +101,7 @@ export default function LaciManager({ outletId }) {
 
       const realOutletId = fromLaci.outlet_id || outletId;
 
+      // 1. Update saldo
       const { error: err1 } = await supabase.from("laci").update({ saldo: Number(fromLaci.saldo||0) - jumlah }).eq("id", fromLaci.id);
       if (err1) { toast.error("err1: " + err1.message); return; }
       
@@ -110,20 +111,26 @@ export default function LaciManager({ outletId }) {
         toast.error("err2: " + err2.message); return; 
       }
       
-      const { error: errTransfer } = await supabase.from("transfer_laci").insert([{
+      // 2. SIMPAN RIWAYAT - WAJIB LENGKAP BIAR TIDAK LACI->LACI
+      const { data: inserted, error: errTransfer } = await supabase.from("transfer_laci").insert([{
         outlet_id: realOutletId,
         dari_laci_id: fromLaci.id,
         ke_laci_id: finalTo.id,
         dari_nama: fromLaci.nama,
         ke_nama: finalTo.nama,
         jumlah: Number(jumlah),
-      }]);
+        keterangan: `${fromLaci.nama} -> ${finalTo.nama}`,
+        kasir_email: user?.email || profile?.email || "owner",
+      }]).select();
       
       if (errTransfer) {
+        console.error("GAGAL INSERT transfer_laci:", errTransfer);
         toast.error("Gagal simpan riwayat: " + errTransfer.message);
-        return;
+      } else {
+        console.log("BERHASIL INSERT:", inserted);
       }
 
+      // 3. Mutasi bank
       await supabase.from("laci_mutasi").insert([
         { outlet_id: realOutletId, laci_id: fromLaci.id, tipe: 'keluar', jumlah: Number(jumlah), keterangan: `Transfer ${fromLaci.nama} -> ${finalTo.nama}` },
         { outlet_id: realOutletId, laci_id: finalTo.id, tipe: 'masuk', jumlah: Number(jumlah), keterangan: `Terima dari ${fromLaci.nama}` }
@@ -196,7 +203,7 @@ export default function LaciManager({ outletId }) {
             <div key={r.id} className="flex justify-between items-center text-[11px] border-b py-1.5">
               <div className="flex flex-col">
                 <span className="font-semibold">{r.dari_nama || r.dari_laci_id} → {r.ke_nama || r.ke_laci_id}</span>
-                <span className="text-[9px] text-slate-400">{formatWita(r)} • {r.keterangan || ''}</span>
+                <span className="text-[9px] text-slate-400">{r.jam_wita_text ? r.jam_wita_text + ' WITA' : formatWita(r)} • {r.keterangan}</span>
               </div>
               <span className="font-black">{rupiah(r.jumlah)}</span>
             </div>
@@ -211,8 +218,8 @@ export default function LaciManager({ outletId }) {
 
       <Dialog open={openAdd} onOpenChange={setOpenAdd}><DialogContent className="bg-white"><DialogHeader><DialogTitle>Tambah Laci</DialogTitle></DialogHeader><form onSubmit={handleAdd} className="space-y-3"><Input value={form.kode} onChange={e=>setForm({...form, kode: e.target.value})} placeholder="Kode" className="h-8" /><Input value={form.nama} onChange={e=>setForm({...form, nama: e.target.value})} placeholder="Nama" className="h-8" /><Input value={rupiah(form.saldo)} onChange={e=>setForm({...form, saldo: parseRupiah(e.target.value)})} className="h-8" /><Button type="submit" className="w-full bg-black text-white">Simpan</Button></form></DialogContent></Dialog>
       
-      <Dialog open={openTransfer} onOpenChange={setOpenTransfer}><DialogContent className="bg-white"><DialogHeader><DialogTitle>Transfer Laci (Bebas)</DialogTitle>
-        <p className="text-[11px] text-slate-500">Pilih dari dan ke laci mana saja, saldo akan pindah.</p>
+      <Dialog open={openTransfer} onOpenChange={setOpenTransfer}><DialogContent className="bg-white"><DialogHeader><DialogTitle>Transfer Laci (BEBAS)</DialogTitle>
+        <p className="text-[11px] text-slate-500">Pilih dari dan ke laci mana saja - bebas tidak auto CASH BANK lagi.</p>
       </DialogHeader>
       <form onSubmit={handleTransfer} className="space-y-3">
         <div><Label className="text-xs">Dari</Label>
