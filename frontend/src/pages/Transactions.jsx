@@ -4,50 +4,44 @@ import { rupiah } from "@/lib/format";
 
 export default function Transactions({ outletId }) {
   
-  // 1. RIWAYAT TRANSFER ANTAR LACI - FIX TANPA FILTER outlet_id
+  // 1. RIWAYAT TRANSFER ANTAR LACI - FINAL PAKAI outlet_id (sesuai foto SQL kamu)
   const { data: riwayatTransfer = [], refetch: refetchTransfer } = useQuery({
-    queryKey: ["riwayat-transfer"],
+    queryKey: ["riwayat-transfer", outletId],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("transfer_laci")
-        .select("*")
-        .order("created_at", { ascending: false })
-        .limit(100);
+      if (!outletId) {
+        const { data } = await supabase.from("transfer_laci").select("*").order("created_at", { ascending: false }).limit(100);
+        return data || [];
+      }
+      // coba filter pakai outlet_id dulu (ini yang benar)
+      const { data, error } = await supabase.from("transfer_laci").select("*").eq("outlet_id", outletId).order("created_at", { ascending: false }).limit(100);
       if (error) {
-        console.error("transfer_laci error:", error);
+        console.error(error);
         return [];
       }
-      return data || [];
+      // kalau kosong karena data lama NULL, ambil semua sebagai fallback
+      if (!data || data.length === 0) {
+        const { data: all } = await supabase.from("transfer_laci").select("*").order("created_at", { ascending: false }).limit(100);
+        return all || [];
+      }
+      return data;
     },
+    enabled: true,
   });
 
-  // 2. RIWAYAT TRANSAKSI BANK - FIX TAMPIL SEMUA
+  // 2. RIWAYAT TRANSAKSI BANK - FINAL
   const { data: riwayatBank = [], refetch: refetchBank } = useQuery({
-    queryKey: ["riwayat-bank"],
+    queryKey: ["riwayat-bank", outletId],
     queryFn: async () => {
-      // Coba ambil dari transaksi_bank
-      const { data: bankData } = await supabase
-        .from("transaksi_bank")
-        .select("*")
-        .order("created_at", { ascending: false })
-        .limit(100);
-      
-      if (bankData && bankData.length > 0) return bankData;
-
-      // Kalau kosong, coba dari tabel transaksi
-      const { data: transaksiData } = await supabase
-        .from("transaksi")
-        .select("*")
-        .order("created_at", { ascending: false })
-        .limit(100);
-      
-      // Filter hanya yang berbau BANK kalau ada kolom jenis/keterangan
-      if (transaksiData) {
-        // tampilkan semua dulu biar tidak 0x terus
-        return transaksiData;
+      if (outletId) {
+        const { data: d1 } = await supabase.from("transaksi_bank").select("*").eq("outlet_id", outletId).order("created_at", { ascending: false }).limit(100);
+        if (d1 && d1.length > 0) return d1;
+        const { data: d2 } = await supabase.from("transaksi").select("*").eq("outlet_id", outletId).order("created_at", { ascending: false }).limit(100);
+        if (d2 && d2.length > 0) return d2;
       }
-      
-      return [];
+      const { data: bankData } = await supabase.from("transaksi_bank").select("*").order("created_at", { ascending: false }).limit(100);
+      if (bankData && bankData.length > 0) return bankData;
+      const { data: transaksiData } = await supabase.from("transaksi").select("*").order("created_at", { ascending: false }).limit(100);
+      return transaksiData || [];
     },
   });
 
@@ -66,7 +60,6 @@ export default function Transactions({ outletId }) {
 
   return (
     <div className="p-3 space-y-4">
-      {/* KOTAK 1 - TRANSFER LACI */}
       <div className="border rounded-lg p-3 bg-white">
         <div className="flex justify-between items-center mb-2">
           <p className="font-bold text-[13px]">Riwayat Transfer Antar Laci ({riwayatTransfer.length}x)</p>
@@ -86,7 +79,6 @@ export default function Transactions({ outletId }) {
         </div>
       </div>
 
-      {/* KOTAK 2 - TRANSAKSI BANK */}
       <div className="border rounded-lg p-3 bg-white">
         <div className="flex justify-between items-center mb-2">
           <p className="font-bold text-[13px]">Riwayat Transaksi Bank ({riwayatBank.length}x)</p>
