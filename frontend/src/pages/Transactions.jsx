@@ -5,7 +5,7 @@ import { useEffect } from "react";
 
 export default function Transactions({ outletId }) {
 
-  const { data: riwayatTransfer = [], refetch: refetchTransfer } = useQuery({
+    const { data: riwayatTransfer = [], refetch: refetchTransfer } = useQuery({
     queryKey: ["riwayat-transfer", outletId],
     queryFn: async () => {
       const { data, error } = await supabase.from("transfer_laci").select("*").order("created_at", { ascending: false }).limit(100);
