@@ -54,50 +54,47 @@ export default function LaciManager({ outletId }) {
     qc.invalidateQueries({ queryKey: ["laci-all"] });
   };
 
-  const handleEditFull = async () => {
-    if (!openEdit) return;
-    const { error } = await supabase.from("laci").update({ kode: openEdit.kode.toUpperCase(), nama: openEdit.nama, jenis: openEdit.jenis, saldo: openEdit.saldo }).eq("id", openEdit.id);
-    if (error) return toast.error(error.message);
-    toast.success(`Berhasil diupdate`);
-    setOpenEdit(null);
-    qc.invalidateQueries({ queryKey: ["laci-all"] });
-  };
-
-  const handleDelete = async (laci) => {
-    if (!confirm(`Hapus ${laci.nama}?`)) return;
-    const { error } = await supabase.from("laci").delete().eq("id", laci.id);
-    if (error) return toast.error(error.message);
-    toast.success(`Dihapus`);
-    qc.invalidateQueries({ queryKey: ["laci-all"] });
-  };
-
-  const handleTransfer = async (e) => {
-    e.preventDefault();
+    const handleTransfer = async () => {
     try {
-      const fromLaci = lacis.find(l => l.id === transfer.from);
-      const finalTo = lacis.find(l => l.id === transfer.to);
-      if (!fromLaci || !finalTo) return toast.error("Pilih laci!");
-      if (fromLaci.id === finalTo.id) return toast.error("Asal dan tujuan sama!");
-      const jumlah = Number(transfer.amount) || 0;
-      if (jumlah <= 0) return toast.error("Jumlah 0!");
+      const realOutletId = outletId || fromLaci?.outlet_id || '87aab4db-13a9-4fed-b00c-495fbdb46965';
+      const finalTo = toLaci || lacis.find(l => l.id === transfer.to);
 
-        const realOutletId = outletId || fromLaci.outlet_id || '87aab4db-13a9-4fed-b00c-495fbdb46965';
+      if (!fromLaci || !finalTo || !jumlah || jumlah <= 0) {
+        return toast.error("Lengkapi data transfer!");
+      }
 
-  console.log("COBA INSERT:", { realOutletId, dari: fromLaci.nama, ke: finalTo.nama, jumlah });
+      const { data, error: errTransfer } = await supabase
+        .from("transfer_laci")
+        .insert({
+          outlet_id: realOutletId,
+          dari_nama: fromLaci.nama,
+          ke_nama: finalTo.nama,
+          jumlah: jumlah
+        })
+        .select();
 
-  const { data, error: errTransfer } = await supabase.from("transfer_laci").insert({
-    outlet_id: realOutletId,
-    dari_nama: fromLaci.nama,
-    ke_nama: finalTo.nama,
-    jumlah: jumlah,
-  }).select();
-  
-  if (errTransfer) {
-    console.error("GAGAL INSERT:", errTransfer);
-    toast.error("GAGAL: " + errTransfer.message);
-    return;
-  }
+      if (errTransfer) {
+        console.error("GAGAL INSERT:", errTransfer);
+        return toast.error("GAGAL CATAT: " + errTransfer.message);
+      }
 
+      console.log("BERHASIL INSERT:", data);
+
+      await supabase.from("laci").update({ saldo: Number(fromLaci.saldo||0) - jumlah }).eq("id", fromLaci.id);
+      await supabase.from("laci").update({ saldo: Number(finalTo.saldo||0) + jumlah }).eq("id", finalTo.id);
+
+      toast.success(`Berhasil ${fromLaci.nama} → ${finalTo.nama} ${rupiah(jumlah)}`);
+      setOpenTransfer(false);
+      setTransfer({ from: "", to: "", amount: 0 });
+      qc.invalidateQueries({ queryKey: ["laci-all"] });
+      qc.invalidateQueries({ queryKey: ["transfer-laci"] });
+      qc.invalidateQueries({ queryKey: ["riwayat-transfer-laci"] });
+      qc.invalidateQueries({ queryKey: ["transaksi"] });
+
+    } catch (err) {
+      toast.error("ERROR: " + err.message);
+    }
+  };
   console.log("BERHASIL INSERT:", data);
 toast.success("Transfer " + jumlah + " berhasil!");
 
