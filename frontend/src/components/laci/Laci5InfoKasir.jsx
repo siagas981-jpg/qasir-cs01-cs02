@@ -11,11 +11,8 @@ export default function Laci5InfoKasir({ outletId }) {
     const { data: laci } = await supabase.from("laci").select("*").eq("outlet_id", outletId).order("kode")
     if (!laci) return
     
-    // FIX: Jangan cuma andalkan parent_id, tapi cari kode LACI_5_*
     const anak = laci.filter(l => l.kode?.startsWith("LACI_5_"))
     const totalHitung = anak.reduce((s, a) => s + Number(a.saldo || 0), 0)
-    
-    console.log("LACI_5_DEBUG:", anak.length, totalHitung) // buat cek di console
     
     setTotal(totalHitung)
     setRincian(anak)
@@ -23,9 +20,20 @@ export default function Laci5InfoKasir({ outletId }) {
 
   useEffect(() => {
     fetchLaci5()
-    const interval = setInterval(fetchLaci5, 5000)
-    return () => clearInterval(interval)
-  }, [fetchLaci5])
+    
+    // AUTO REFRESH TIAP ADA PERUBAHAN LACI / TRANSFER
+    const channel = supabase
+      .channel('laci-5-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'laci', filter: `outlet_id=eq.${outletId}` }, fetchLaci5)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'transfer_laci', filter: `outlet_id=eq.${outletId}` }, fetchLaci5)
+      .subscribe()
+
+    const interval = setInterval(fetchLaci5, 10000)
+    return () => {
+      supabase.removeChannel(channel)
+      clearInterval(interval)
+    }
+  }, [fetchLaci5, outletId])
 
   if (rincian.length === 0) return null
 
@@ -40,16 +48,16 @@ export default function Laci5InfoKasir({ outletId }) {
       {open && (
         <div className="fixed bottom-[70px] right-5 z-50 w-[380px] bg-white border rounded-xl shadow-xl p-3">
           <div className="flex justify-between mb-2">
-            <h3 className="text-[11px] font-bold">LACI 5 - Total Aset (8)</h3>
-            <span className="text-[8px] bg-emerald-100 px-2 py-0.5 rounded-full">AUTO</span>
+            <h3 className="text-[11px] font-bold">LACI 5 - Total Aset ({rincian.length})</h3>
+            <span className="text-[8px] bg-emerald-100 px-2 py-0.5 rounded-full">REALTIME</span>
           </div>
           <div className="font-black text-[16px] mb-3">Rp {total.toLocaleString("id-ID")}</div>
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-3 gap-2 max-h-[300px] overflow-auto">
             {rincian.map((b) => (
               <div key={b.id} className="bg-slate-50 rounded-lg p-2 border">
                 <div className="text-[8px] text-slate-400 font-bold truncate">{b.kode?.replace('LACI_5_','')}</div>
                 <div className="text-[10px] font-bold truncate">{b.nama}</div>
-                <div className="text-[11px] font-black">Rp {Number(b.saldo||0).toLocaleString()}</div>
+                <div className="text-[11px] font-black">Rp {Number(b.saldo||0).toLocaleString("id-ID")}</div>
               </div>
             ))}
           </div>
