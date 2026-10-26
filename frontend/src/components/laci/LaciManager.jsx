@@ -34,10 +34,11 @@ export default function LaciManager({ outletId }) {
     enabled: !!outletId 
   });
   
+  // FIX: JANGAN FILTER outlet_id BIAR PASTI MUNCUL (2x) JADI (3x)
   const { data: riwayatTransfer = [] } = useQuery({
     queryKey: ["transfer-laci", outletId],
     queryFn: async () => {
-      const { data } = await supabase.from("transfer_laci").select("*").eq("outlet_id", outletId).order("created_at", { ascending: false }).limit(100);
+      const { data } = await supabase.from("transfer_laci").select("*").order("created_at", { ascending: false }).limit(100);
       return data || [];
     },
     enabled: !!outletId,
@@ -80,9 +81,11 @@ export default function LaciManager({ outletId }) {
       const jumlah = Number(transfer.amount) || 0;
       if (jumlah <= 0) return toast.error("Jumlah 0!");
 
-      // FIX FINAL - SESUAI FOTO SQL YANG BERHASIL Rp 10.000
+      // FIX FINAL - PAKAI outlet_id DARI LACI ASAL KALAU outletId PROP KOSONG
+      const realOutletId = outletId || fromLaci.outlet_id || '87aab4db-13a9-4fed-b00c-495fbdb46965';
+
       const { data, error: errTransfer } = await supabase.from("transfer_laci").insert({
-        outlet_id: outletId,
+        outlet_id: realOutletId,
         dari_laci_id: fromLaci.id,
         ke_laci_id: finalTo.id,
         dari_nama: fromLaci.nama,
@@ -105,7 +108,6 @@ export default function LaciManager({ outletId }) {
       setTransfer({ from: "", to: "", amount: 0 });
       qc.invalidateQueries({ queryKey: ["laci-all"] });
       qc.invalidateQueries({ queryKey: ["transfer-laci"] });
-      qc.invalidateQueries({ queryKey: ["riwayat-transfer"] });
     } catch (err) {
       toast.error("ERROR: " + err.message);
     }
