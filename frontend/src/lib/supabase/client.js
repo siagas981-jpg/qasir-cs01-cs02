@@ -1,25 +1,9 @@
 import { createClient } from "@supabase/supabase-js";
 
-// Baca ENV yang benar untuk craco build (REACT_APP) + fallback VITE
-const supabaseUrl = 
-  process.env.REACT_APP_SUPABASE_URL || 
-  process.env.NEXT_PUBLIC_SUPABASE_URL || 
-  (typeof import.meta !== "undefined" ? import.meta.env?.VITE_SUPABASE_URL : null);
+const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
+const supabaseAnonKey = process.env.REACT_APP_SUPABASE_ANON_KEY;
 
-const supabaseAnonKey = 
-  process.env.REACT_APP_SUPABASE_ANON_KEY || 
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 
-  (typeof import.meta !== "undefined" ? import.meta.env?.VITE_SUPABASE_ANON_KEY : null);
-
-// Jangan throw biar gak layar putih, cukup log aja
-if (!supabaseUrl || !supabaseAnonKey) {
-  console.error("SUPABASE ENV KOSONG!", { 
-    url: !!supabaseUrl, 
-    key: !!supabaseAnonKey,
-    REACT_APP_URL: process.env.REACT_APP_SUPABASE_URL,
-    VITE_URL: typeof import.meta !== "undefined" ? import.meta.env?.VITE_SUPABASE_URL : "no import.meta"
-  });
-}
+console.log("CHECK ENV:", { hasUrl: !!supabaseUrl, hasKey: !!supabaseAnonKey });
 
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
