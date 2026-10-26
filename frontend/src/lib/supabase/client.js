@@ -1,6 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
 
-// FIX TOTAL: BACA SEMUA VERSI ENV BIAR GAK PUTIH LAGI OWY!
 const getEnv = (viteName, nextName, reactName) => {
   if (typeof import.meta !== "undefined" && import.meta.env) {
     if (import.meta.env[viteName]) return import.meta.env[viteName];
@@ -21,14 +20,17 @@ const supabaseAnonKey =
   getEnv("VITE_SU_NON_KEY", "NEXT_PU_NON_KEY", "REACT_A_NON_KEY") ||
   getEnv("VITE_SUPABASE_ANON_KEY", "NEXT_PU_BLE_KEY", "REACT_APP_FORCE");
 
-console.log("[SUPABASE] URL:", supabaseUrl ? "OK " + supabaseUrl.slice(0,30)+"..." : "KOSONG!");
-console.log("[SUPABASE] KEY:", supabaseAnonKey ? "OK ADA" : "KOSONG!");
+const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-if (!supabaseUrl) {
-  throw new Error("SUPABASE URL KOSONG! Cek Vercel Environment Variables: VITE_SUPABASE_URL");
-}
-if (!supabaseAnonKey) {
-  throw new Error("SUPABASE KEY KOSONG! Cek Vercel Environment Variables: VITE_SUPABASE_ANON_KEY");
-}
+// === INI YANG HILANG BIKIN FAILED TADI OWY! ===
+export const healthCheck = async () => {
+  try {
+    const { error } = await supabase.from("outlets").select("id").limit(1);
+    return !error;
+  } catch {
+    return false;
+  }
+};
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+export { supabase };
+export default supabase;
