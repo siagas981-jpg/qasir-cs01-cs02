@@ -1,34 +1,59 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase/client";
 import { rupiah } from "@/lib/format";
+import { useEffect } from "react";
 
 export default function Transactions({ outletId }) {
   
   const { data: riwayatTransfer = [], refetch: refetchTransfer } = useQuery({
     queryKey: ["riwayat-transfer", outletId],
     queryFn: async () => {
-      if (!outletId) {
-        const { data } = await supabase.from("transfer_laci").select("*").order("created_at", { ascending: false }).limit(100);
-        return data || [];
+      // AMBIL SEMUA DULU, TIDAK USAH FILTER OUTLET BIAR PASTI MUNCUL
+      const { data, error } = await supabase.from("transfer_laci").select("*").order("created_at", { ascending: false }).limit(100);
+      if (error) {
+        console.log("TRANSFER ERROR:", error);
+        return [];
       }
-      const { data, error } = await supabase.from("transfer_laci").select("*").eq("outlet_id", outletId).order("created_at", { ascending: false }).limit(100);
-      if (error || !data || data.length === 0) {
-        const { data: all } = await supabase.from("transfer_laci").select("*").order("created_at", { ascending: false }).limit(100);
-        return all || [];
-      }
-      return data;
+      console.log("TRANSFER OK:", data?.length, "rows");
+      return data || [];
     },
   });
 
   const { data: riwayatBank = [], refetch: refetchBank } = useQuery({
     queryKey: ["riwayat-bank", outletId],
     queryFn: async () => {
-      const { data: bank } = await supabase.from("transaksi_bank").select("*").eq("outlet_id", outletId).order("created_at", { ascending: false }).limit(100);
-      if (bank && bank.length > 0) return bank;
-      const { data: all } = await supabase.from("transaksi_bank").select("*").order("created_at", { ascending: false }).limit(100);
-      return all || [];
+      // COBA transaksi_bank DULU
+      try {
+        const { data: bank, error } = await supabase.from("transaksi_bank").select("*").order("created_at", { ascending: false }).limit(100);
+        if (!error && bank && bank.length > 0) return bank;
+        if (!error && bank) return bank;
+      } catch (e) {
+        console.log("BANK TABLE BELUM ADA");
+      }
+      // KALAU transaksi_bank KOSONG / TIDAK ADA, COBA DARI TABEL transaksi
+      try {
+        const { data: trx } = await supabase.from("transaksi").select("*").order("created_at", { ascending: false }).limit(100);
+        // filter yang ada bank-nya saja
+        return (trx || []).filter(t => t.bank || t.jenis === 'BANK' || t.metode === 'BANK');
+      } catch (e) {
+        return [];
+      }
     },
   });
+
+  // REALTIME - AUTO REFRESH KALAU ADA TRANSFER BARU
+  useEffect(() => {
+    const channel = supabase
+      .channel('transactions-realtime')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'transfer_laci' }, () => {
+        refetchTransfer();
+      })
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'transaksi_bank' }, () => {
+        refetchBank();
+      })
+      .subscribe();
+    return () => supabase.removeChannel(channel);
+  }, [refetchTransfer, refetchBank]);
 
   const formatWita = (dateStr) => {
     if (!dateStr) return '-';
