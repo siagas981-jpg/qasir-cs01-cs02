@@ -8,13 +8,19 @@ export default function Transactions() {
   const [tab, setTab] = useState("transfer"); // transfer | bank
 
   const { data: transfer = [], refetch: refTransfer } = useQuery({
-    queryKey: ["riwayat-transfer-laci-final", activeOutletId],
-    enabled: !!activeOutletId,
-    queryFn: async () => {
-      const { data } = await supabase.from("transfer_laci").select("*").eq("outlet_id", activeOutletId).order("created_at", { ascending: false }).limit(100);
-      return data || [];
+  queryKey: ["riwayat-transfer-laci-final", activeOutletId],
+  enabled: !!activeOutletId,
+  queryFn: async () => {
+    console.log("ACTIVE OUTLET ID:", activeOutletId);
+    const { data, error } = await supabase.from("transfer_laci").select("*").eq("outlet_id", activeOutletId).order("created_at", { ascending: false }).limit(100);
+    if(error) {
+      console.error("ERROR transfer_laci:", error);
+      return [];
     }
-  });
+    console.log("HASIL transfer_laci:", data);
+    return data || [];
+  }
+});
 
   const { data: bankTx = [], refetch: refBank } = useQuery({
     queryKey: ["bank-transactions-history", activeOutletId],
