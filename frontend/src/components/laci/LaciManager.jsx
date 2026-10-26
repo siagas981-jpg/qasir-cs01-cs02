@@ -81,18 +81,24 @@ export default function LaciManager({ outletId }) {
       const jumlah = Number(transfer.amount) || 0;
       if (jumlah <= 0) return toast.error("Jumlah 0!");
 
-      // FIX FINAL - PAKAI outlet_id DARI LACI ASAL KALAU outletId PROP KOSONG
-      const realOutletId = outletId || fromLaci.outlet_id || '87aab4db-13a9-4fed-b00c-495fbdb46965';
+        const realOutletId = outletId || fromLaci.outlet_id || '87aab4db-13a9-4fed-b00c-495fbdb46965';
 
-      const { data, error: errTransfer } = await supabase.from("transfer_laci").insert({
-        outlet_id: realOutletId,
-        dari_laci_id: fromLaci.id,
-        ke_laci_id: finalTo.id,
-        dari_nama: fromLaci.nama,
-        ke_nama: finalTo.nama,
-        jumlah: jumlah,
-        keterangan: `${fromLaci.nama} -> ${finalTo.nama}`,
-      }).select();
+  console.log("COBA INSERT:", { realOutletId, dari: fromLaci.nama, ke: finalTo.nama, jumlah });
+
+  const { data, error: errTransfer } = await supabase.from("transfer_laci").insert({
+    outlet_id: realOutletId,
+    dari_nama: fromLaci.nama,
+    ke_nama: finalTo.nama,
+    jumlah: jumlah,
+  }).select();
+  
+  if (errTransfer) {
+    console.error("GAGAL INSERT:", errTransfer);
+    toast.error("GAGAL: " + errTransfer.message);
+    return;
+  }
+
+  console.log("BERHASIL INSERT:", data);
       
       if (errTransfer) {
         console.error("GAGAL INSERT:", errTransfer);
