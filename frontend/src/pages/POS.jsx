@@ -155,15 +155,17 @@ export default function POS() {
     qc.invalidateQueries({ queryKey: ["products", activeOutletId] });
   };
 
-  // === INI YANG SUDAH FIX RIWAYAT OWY ===
+  // === FIX TOTAL: SALDO TIDAK CUKUP PADAHAL PILIH MASUK ===
   const handleBankTx = async () => {
     if (!bankLaciId || !bankJumlah) { toast.error("Pilih bank & isi jumlah"); return; }
     setBankLoading(true);
     try {
       const nowShift = shift?.currentShift || shift?.shiftName || "MALAM";
       const jumlahNum = unformatRupiah(bankJumlah);
+      if (jumlahNum <= 0) { toast.error("Jumlah harus > 0"); setBankLoading(false); return; }
+      
       const selectedLaci = laciBank.find((b) => b.id === bankLaciId);
-      if (!selectedLaci) { toast.error("Bank tidak ditemukan"); return; }
+      if (!selectedLaci) { toast.error("Bank tidak ditemukan"); setBankLoading(false); return; }
 
       const KHUSUS_AUTO_CASHBANK = ['BRI', 'BNI', 'MANDIRI', 'DANA', 'BUKU AGEN'];
       const namaUpper = (selectedLaci.nama || "").toUpperCase();
@@ -175,11 +177,30 @@ export default function POS() {
         return k === "LACI_5_CASHBANK" || k.includes("CASHBANK") || (n.includes("CASH") && n.includes("BANK"));
       });
 
-      if (bankTipe === "masuk" && isKhususBank && cashBankLaci && (cashBankLaci.saldo || 0) < jumlahNum) {
-        toast.error(`Saldo CASH BANK tidak cukup! Sisa Rp ${Number(cashBankLaci.saldo).toLocaleString()}`);
-        setBankLoading(false);
-        return;
+      // VALIDASI YANG BENAR
+      if (bankTipe === "masuk" && isKhususBank) {
+        if (!cashBankLaci) { toast.error("Laci CASH BANK tidak ditemukan!"); setBankLoading(false); return; }
+        if ((cashBankLaci.saldo || 0) < jumlahNum) {
+          toast.error(`Saldo CASH BANK tidak cukup! Sisa Rp ${Number(cashBankLaci.saldo||0).toLocaleString("id-ID")} | Butuh Rp ${jumlahNum.toLocaleString("id-ID")}`);
+          setBankLoading(false);
+          return;
+        }
       }
+      if (bankTipe === "keluar" && isKhususBank) {
+        if ((selectedLaci.saldo || 0) < jumlahNum) {
+          toast.error(`Saldo ${selectedLaci.nama} tidak cukup! Sisa Rp ${Number(selectedLaci.saldo||0).toLocaleString("id-ID")}`);
+          setBankLoading(false);
+          return;
+        }
+      }
+      if (bankTipe === "keluar" && !isKhususBank) {
+        if ((selectedLaci.saldo || 0) < jumlahNum) {
+          toast.error(`Saldo ${selectedLaci.nama} tidak cukup! Sisa Rp ${Number(selectedLaci.saldo||0).toLocaleString("id-ID")}`);
+          setBankLoading(false);
+          return;
+        }
+      }
+      // Kalau masuk ke bank biasa, TIDAK CEK SALDO!
 
       const { error } = await supabase.from("bank_transactions").insert({
         outlet_id: activeOutletId,
