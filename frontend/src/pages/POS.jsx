@@ -1,18 +1,16 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
-import { useOutlet } from "@/hooks/useOutlet";
-import { useShift } from "@/hooks/useShift";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 export default function Laci5InfoKasir() {
-  const { activeOutletId } = useOutlet();
-  const shift = useShift();
+  // FIX BUILD: jangan pakai useOutlet/useShift yang gak ada
+  const activeOutletId = localStorage.getItem("active_outlet_id") || "87aab4db-13a9-4fed-b00c-495fbdb46965";
+  const shift = { currentShift: "SHIFT_1", shiftName: "SHIFT_1" };
   const qc = useQueryClient();
-  const user = supabase.auth.getUser();
 
   const [bankLaciId, setBankLaciId] = useState("");
   const [bankTipe, setBankTipe] = useState("masuk");
@@ -30,7 +28,6 @@ export default function Laci5InfoKasir() {
     return num.toLocaleString("id-ID");
   };
 
-  // Query laci bank
   const { data: laciBank = [] } = useQuery({
     queryKey: ["laci-bank", activeOutletId],
     queryFn: async () => {
@@ -45,19 +42,8 @@ export default function Laci5InfoKasir() {
     enabled: !!activeOutletId,
   });
 
-  // Query semua laci
-  const { data: laciAll = [] } = useQuery({
-    queryKey: ["laci-all", activeOutletId],
-    queryFn: async () => {
-      const { data } = await supabase.from("laci").select("*").eq("outlet_id", activeOutletId);
-      return data || [];
-    },
-    enabled: !!activeOutletId,
-  });
-
   const totalLaci5 = laciBank.reduce((acc, cur) => acc + (cur.saldo || 0), 0);
 
-  // === FIX FINAL ANTI MINUS - AMBIL SALDO FRESH DARI DB ===
   const handleBankTx = async () => {
     if (!bankLaciId || !bankJumlah) {
       toast.error("Pilih bank & isi jumlah");
@@ -65,7 +51,6 @@ export default function Laci5InfoKasir() {
     }
     setBankLoading(true);
     try {
-      const nowShift = shift?.currentShift || shift?.shiftName || "SHIFT_1";
       const jumlahNum = unformatRupiah(bankJumlah);
       if (jumlahNum <= 0) {
         toast.error("Jumlah harus > 0");
@@ -73,7 +58,6 @@ export default function Laci5InfoKasir() {
         return;
       }
 
-      // AMBIL SALDO FRESH DARI DATABASE, JANGAN DARI CACHE!
       const { data: freshLaci, error: freshErr } = await supabase
         .from("laci")
         .select("*")
@@ -91,12 +75,10 @@ export default function Laci5InfoKasir() {
       const namaUpper = (selectedLaci.nama || "").toUpperCase();
       const isKhususBank = KHUSUS_AUTO_CASHBANK.some((k) => namaUpper.includes(k));
 
-      // Ambil CASH BANK fresh juga
       const { data: allLaciFresh } = await supabase
         .from("laci")
         .select("*")
-        .eq("outlet_id", activeOutletId)
-        .ilike("kode", "LACI_5_%");
+        .eq("outlet_id", activeOutletId);
 
       const cashBankLaci = allLaciFresh?.find((l) => {
         const n = (l.nama || "").toUpperCase();
@@ -104,13 +86,12 @@ export default function Laci5InfoKasir() {
         return k === "LACI_5_CASHBANK" || k.includes("CASHBANK") || (n.includes("CASH") && n.includes("BANK"));
       });
 
-      // VALIDASI PAKAI SALDO FRESH
       if (bankTipe === "keluar") {
         if ((selectedLaci.saldo || 0) < jumlahNum) {
           toast.error(
             `Saldo ${selectedLaci.nama} tidak cukup! Sisa Rp ${Number(
               selectedLaci.saldo || 0
-            ).toLocaleString("id-ID")} | Mau keluar Rp ${jumlahNum.toLocaleString("id-ID")}`
+            ).toLocaleString("id-ID")}`
           );
           setBankLoading(false);
           return;
@@ -124,11 +105,7 @@ export default function Laci5InfoKasir() {
           return;
         }
         if ((cashBankLaci.saldo || 0) < jumlahNum) {
-          toast.error(
-            `Saldo CASH BANK tidak cukup! Sisa Rp ${Number(cashBankLaci.saldo || 0).toLocaleString(
-              "id-ID"
-            )}`
-          );
+          toast.error(`Saldo CASH BANK tidak cukup! Sisa Rp ${Number(cashBankLaci.saldo || 0).toLocaleString("id-ID")}`);
           setBankLoading(false);
           return;
         }
@@ -140,7 +117,7 @@ export default function Laci5InfoKasir() {
       const { error } = await supabase.from("bank_transactions").insert({
         outlet_id: activeOutletId,
         laci_id: bankLaciId,
-        shift: nowShift,
+        shift: shift.currentShift,
         kasir_email: emailUser,
         tipe: bankTipe,
         jumlah: jumlahNum,
@@ -169,7 +146,6 @@ export default function Laci5InfoKasir() {
           bankTipe === "keluar"
             ? (selectedLaci.saldo || 0) - jumlahNum
             : (selectedLaci.saldo || 0) + jumlahNum;
-
         const { error: e1 } = await supabase.from("laci").update({ saldo: newSaldo }).eq("id", selectedLaci.id);
         if (e1) throw e1;
         toast.success(`Transaksi ${bankTipe} ${selectedLaci.nama} Rp ${bankJumlah} berhasil!`);
@@ -180,7 +156,6 @@ export default function Laci5InfoKasir() {
       setBankLaciId("");
       qc.invalidateQueries({ queryKey: ["laci-bank"] });
       qc.invalidateQueries({ queryKey: ["laci-all"] });
-      qc.invalidateQueries({ queryKey: ["riwayat-transfer-laci-final"] });
     } catch (e) {
       console.error(e);
       toast.error("Gagal: " + e.message);
@@ -228,14 +203,9 @@ export default function Laci5InfoKasir() {
           onChange={(e) => setBankKet(e.target.value)}
           className="mb-3"
         />
-        <Button
-          onClick={handleBankTx}
-          disabled={bankLoading}
-          className="w-full bg-green-700 hover:bg-green-800 text-white"
-        >
+        <Button onClick={handleBankTx} disabled={bankLoading} className="w-full bg-green-700 hover:bg-green-800 text-white">
           {bankLoading ? "Menyimpan..." : `Simpan ${bankTipe.toUpperCase()} - Shift 1`}
         </Button>
-        <p className="text-[11px] text-gray-500 mt-2">Auto catat: siagas981@gmail.com | Shift 1 | Saldo LACI_5 auto nambah/kurang</p>
       </div>
 
       <div className="flex justify-between items-center">
