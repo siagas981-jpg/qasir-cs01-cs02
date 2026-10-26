@@ -28,18 +28,19 @@ export default function LaciManager({ outletId }) {
   const [form, setForm] = useState({ kode: "", nama: "", jenis: "CASH", saldo: 0 });
   const [transfer, setTransfer] = useState({ from: "", to: "", amount: 0 });
   
-  const { data: lacis = [] } = useQuery({ queryKey: ["laci-all", outletId], queryFn: () => fetchAllLaci(outletId), enabled: !!outletId });
+  const { data: lacis = [] } = useQuery({ 
+    queryKey: ["laci-all", outletId], 
+    queryFn: () => fetchAllLaci(outletId), 
+    enabled: !!outletId 
+  });
   
   const { data: riwayatTransfer = [] } = useQuery({
-    queryKey: ["transfer-laci"],
+    queryKey: ["transfer-laci", outletId],
     queryFn: async () => {
-      const { data, error } = await supabase.from("transfer_laci").select("*").order("created_at", { ascending: false }).limit(100);
-      if (error) {
-        console.error(error);
-        return [];
-      }
+      const { data } = await supabase.from("transfer_laci").select("*").eq("outlet_id", outletId).order("created_at", { ascending: false }).limit(100);
       return data || [];
     },
+    enabled: !!outletId,
   });
 
   const handleAdd = async (e) => {
@@ -79,8 +80,11 @@ export default function LaciManager({ outletId }) {
       const jumlah = Number(transfer.amount) || 0;
       if (jumlah <= 0) return toast.error("Jumlah 0!");
 
-      // INSERT FINAL - SAMA PERSIS KAYAK YANG SUKSES DI SQL KAMU
+      // FIX FINAL - SESUAI FOTO SQL YANG BERHASIL Rp 10.000
       const { data, error: errTransfer } = await supabase.from("transfer_laci").insert({
+        outlet_id: outletId,
+        dari_laci_id: fromLaci.id,
+        ke_laci_id: finalTo.id,
         dari_nama: fromLaci.nama,
         ke_nama: finalTo.nama,
         jumlah: jumlah,
@@ -89,11 +93,9 @@ export default function LaciManager({ outletId }) {
       
       if (errTransfer) {
         console.error("GAGAL INSERT:", errTransfer);
-        toast.error("GAGAL: " + errTransfer.message + " | " + errTransfer.details);
+        toast.error("GAGAL: " + errTransfer.message);
         return;
       }
-
-      console.log("BERHASIL INSERT:", data);
 
       await supabase.from("laci").update({ saldo: Number(fromLaci.saldo||0) - jumlah }).eq("id", fromLaci.id);
       await supabase.from("laci").update({ saldo: Number(finalTo.saldo||0) + jumlah }).eq("id", finalTo.id);
@@ -103,16 +105,15 @@ export default function LaciManager({ outletId }) {
       setTransfer({ from: "", to: "", amount: 0 });
       qc.invalidateQueries({ queryKey: ["laci-all"] });
       qc.invalidateQueries({ queryKey: ["transfer-laci"] });
+      qc.invalidateQueries({ queryKey: ["riwayat-transfer"] });
     } catch (err) {
       toast.error("ERROR: " + err.message);
     }
   };
 
-  const formatWita = (rowOrDate) => {
-    if (!rowOrDate) return '-';
-    const utcDate = typeof rowOrDate === 'object' ? rowOrDate.created_at : rowOrDate;
-    if (!utcDate) return '-';
-    return new Date(utcDate).toLocaleString('id-ID', { timeZone: 'Asia/Makassar', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }) + ' WITA';
+  const formatWita = (row) => {
+    if (!row?.created_at) return '-';
+    return new Date(row.created_at).toLocaleString('id-ID', { timeZone: 'Asia/Makassar', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }) + ' WITA';
   };
 
   return (
@@ -150,6 +151,7 @@ export default function LaciManager({ outletId }) {
         </div>
       </div>
       <Dialog open={openAdd} onOpenChange={setOpenAdd}><DialogContent className="bg-white"><DialogHeader><DialogTitle>Tambah Laci</DialogTitle></DialogHeader><form onSubmit={handleAdd} className="space-y-3"><Input value={form.kode} onChange={e=>setForm({...form, kode: e.target.value})} placeholder="Kode" /><Input value={form.nama} onChange={e=>setForm({...form, nama: e.target.value})} placeholder="Nama" /><Input value={rupiah(form.saldo)} onChange={e=>setForm({...form, saldo: parseRupiah(e.target.value)})} /><Button type="submit" className="w-full bg-black text-white">Simpan</Button></form></DialogContent></Dialog>
+      <Dialog open={!!openEdit} onOpenChange={()=>setOpenEdit(null)}><DialogContent className="bg-white"><DialogHeader><DialogTitle>Edit Laci</DialogTitle></DialogHeader>{openEdit && <div className="space-y-3"><Input value={openEdit.kode} onChange={e=>setOpenEdit({...openEdit, kode: e.target.value})} /><Input value={openEdit.nama} onChange={e=>setOpenEdit({...openEdit, nama: e.target.value})} /><Input value={rupiah(openEdit.saldo)} onChange={e=>setOpenEdit({...openEdit, saldo: parseRupiah(e.target.value)})} /><Button onClick={handleEditFull} className="w-full bg-black text-white">Update</Button></div>}</DialogContent></Dialog>
       <Dialog open={openTransfer} onOpenChange={setOpenTransfer}><DialogContent className="bg-white"><DialogHeader><DialogTitle>Transfer Laci</DialogTitle></DialogHeader><form onSubmit={handleTransfer} className="space-y-3"><div><Label className="text-xs">Dari</Label><Select value={transfer.from} onValueChange={v=>setTransfer({...transfer, from: v})}><SelectTrigger><SelectValue placeholder="Dari"/></SelectTrigger><SelectContent>{lacis.map(l=><SelectItem key={l.id} value={l.id}>{l.nama} - {rupiah(l.saldo||0)}</SelectItem>)}</SelectContent></Select></div><div><Label className="text-xs">Ke</Label><Select value={transfer.to} onValueChange={v=>setTransfer({...transfer, to: v})}><SelectTrigger><SelectValue placeholder="Ke"/></SelectTrigger><SelectContent>{lacis.map(l=><SelectItem key={l.id} value={l.id}>{l.nama}</SelectItem>)}</SelectContent></Select></div><div><Label className="text-xs">Jumlah</Label><Input value={rupiah(transfer.amount)} onChange={e=>setTransfer({...transfer, amount: parseRupiah(e.target.value)})} /></div><Button type="submit" className="w-full bg-blue-600">Proses Transfer</Button></form></DialogContent></Dialog>
     </div>
   );
