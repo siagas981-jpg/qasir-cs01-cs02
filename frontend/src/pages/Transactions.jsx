@@ -4,11 +4,10 @@ import { rupiah } from "@/lib/format";
 import { useEffect } from "react";
 
 export default function Transactions({ outletId }) {
-  
+
   const { data: riwayatTransfer = [], refetch: refetchTransfer } = useQuery({
     queryKey: ["riwayat-transfer", outletId],
     queryFn: async () => {
-      // AMBIL SEMUA DULU, TIDAK USAH FILTER OUTLET BIAR PASTI MUNCUL
       const { data, error } = await supabase.from("transfer_laci").select("*").order("created_at", { ascending: false }).limit(100);
       if (error) {
         console.log("TRANSFER ERROR:", error);
@@ -18,6 +17,8 @@ export default function Transactions({ outletId }) {
       return data || [];
     },
   });
+
+  const { data: riwayatBank = [], refetch: refetchBank } = useQuery({
 
   const { data: riwayatBank = [], refetch: refetchBank } = useQuery({
     queryKey: ["riwayat-bank", outletId],
