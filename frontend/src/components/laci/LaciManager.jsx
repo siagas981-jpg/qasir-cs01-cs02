@@ -35,20 +35,21 @@ export default function LaciManager({ outletId }) {
       const fromLaci = lacis.find((l) => l.id === transfer.from);
       const toLaci = lacis.find((l) => l.id === transfer.to);
       const jumlah = Number(transfer.amount) || 0;
-      const realOutletId = outletId || fromLaci?.outlet_id || "87aab4db-13a9-4fed-b00c-495fbdb46965";
+      const realOutletId = outletId || fromLaci?.outlet_id;
 
       if (!fromLaci || !toLaci || jumlah <= 0) return toast.error("Lengkapi data!");
       if (fromLaci.id === toLaci.id) return toast.error("Tidak bisa ke laci sama!");
+      if ((fromLaci.saldo || 0) < jumlah) return toast.error("Saldo tidak cukup!");
 
-      const { error } = await supabase.from("transfer_laci").insert({
-        outlet_id: realOutletId,
-        dari_laci_id: fromLaci.id,
-        ke_laci_id: toLaci.id,
-        dari_nama: fromLaci.nama,
-        ke_nama: toLaci.nama,
-        jumlah: jumlah,
-        kasir_email: profile?.email || "owner",
-        keterangan: `${fromLaci.nama} -> ${toLaci.nama}`,
+      // PAKAI FUNGSI ATOMIK - SALDO + RIWAYAT JADI 1 PAKET, TIDAK BISA GAGAL SEPARUH
+      const { error } = await supabase.rpc('transfer_laci_atomic', {
+        p_outlet_id: realOutletId,
+        p_dari_id: fromLaci.id,
+        p_ke_id: toLaci.id,
+        p_dari_nama: fromLaci.nama,
+        p_ke_nama: toLaci.nama,
+        p_jumlah: jumlah,
+        p_email: profile?.email || "owner"
       });
 
       if (error) {
@@ -56,15 +57,15 @@ export default function LaciManager({ outletId }) {
         return toast.error("GAGAL INSERT: " + error.message);
       }
 
-      await supabase.from("laci").update({ saldo: Number(fromLaci.saldo || 0) - jumlah }).eq("id", fromLaci.id);
-      await supabase.from("laci").update({ saldo: Number(toLaci.saldo || 0) + jumlah }).eq("id", toLaci.id);
-
-      toast.success(`Berhasil ${fromLaci.nama} -> ${toLaci.nama} ${rupiah(jumlah)}`);
+      toast.success(`Berhasil ${fromLaci.nama} → ${toLaci.nama} ${rupiah(jumlah)}`);
       setOpenTransfer(false);
       setTransfer({ from: "", to: "", amount: 0 });
       qc.invalidateQueries({ queryKey: ["laci-all"] });
+      qc.invalidateQueries({ queryKey: ["riwayat-transfer-laci-final"] });
       qc.invalidateQueries({ queryKey: ["riwayat-transfer"] });
+
     } catch (err) {
+      console.error(err);
       toast.error("ERROR: " + err.message);
     }
   };
