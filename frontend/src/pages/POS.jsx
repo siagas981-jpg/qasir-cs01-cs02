@@ -3,13 +3,28 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createClient } from "@supabase/supabase-js";
 import { toast } from "sonner";
 
-// FIX TOTAL: bikin supabase client langsung di sini, gak import dari file lain lagi!
 const supabase = createClient(
-  process.env.REACT_APP_SUPABASE_URL,
-  process.env.REACT_APP_SUPABASE_ANON_KEY
+  import.meta.env.VITE_SUPABASE_URL,
+  import.meta.env.VITE_SUPABASE_ANON_KEY
 );
 
-export default function Laci5InfoKasir() {
+// === INI YANG HILANG BIKIN BUILD GAGAL OWY! AKU TAMBAHIN! ===
+export const fetchProducts = async (outletId) => {
+  if (!outletId) return [];
+  const { data, error } = await supabase
+    .from("products")
+    .select("*")
+    .eq("outlet_id", outletId)
+    .order("nama", { ascending: true });
+  if (error) {
+    console.error(error);
+    return [];
+  }
+  return data || [];
+};
+// === END FIX FETCHPRODUCTS ===
+
+export default function POS() {
   const activeOutletId = localStorage.getItem("active_outlet_id") || "87aab4db-13a9-4fed-b00c-495fbdb46965";
   const shift = { currentShift: "SHIFT_1", shiftName: "SHIFT_1" };
   const qc = useQueryClient();
@@ -37,6 +52,12 @@ export default function Laci5InfoKasir() {
       if (error) throw error;
       return data || [];
     },
+    enabled: !!activeOutletId,
+  });
+
+  const { data: products = [] } = useQuery({
+    queryKey: ["products", activeOutletId],
+    queryFn: () => fetchProducts(activeOutletId),
     enabled: !!activeOutletId,
   });
 
@@ -96,7 +117,8 @@ export default function Laci5InfoKasir() {
   return (
     <div className="space-y-4 p-4">
       <div className="border border-green-200 rounded-xl p-4 bg-green-50">
-        <h3 className="font-semibold text-sm mb-3">Transaksi Bank</h3>
+        <h3 className="font-semibold text-sm mb-3">POS + Transaksi Bank (Fix Build)</h3>
+        <p className="text-xs mb-2">Products: {products.length} item loaded (fetchProducts OK)</p>
         <select value={bankLaciId} onChange={e=>setBankLaciId(e.target.value)} className="w-full border p-2 rounded mb-2">
           <option value="">Pilih Bank</option>
           {laciBank.map(l=><option key={l.id} value={l.id}>{l.nama} - Rp {(l.saldo||0).toLocaleString("id-ID")}</option>)}
