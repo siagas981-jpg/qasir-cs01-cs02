@@ -1,72 +1,34 @@
 import { createClient } from "@supabase/supabase-js";
 
-const url = process.env.REACT_APP_SUPABASE_URL;
-const anonKey = process.env.REACT_APP_SUPABASE_ANON_KEY;
-
-if (!url || !anonKey) {
-  console.error("FATAL: Supabase env missing!", {
-    hasUrl: !!url,
-    hasKey: !!anonKey,
-    allEnv: Object.keys(process.env).filter(k => k.includes("SUPABASE"))
-  });
-}
-
-const safeStorage = {
-  _memory: {},
-  getItem(key) {
-    try {
-      return localStorage.getItem(key);
-    } catch (e) {
-      console.warn("safeStorage getItem skip:", e?.name, key);
-      return this._memory[key] || null;
-    }
-  },
-  setItem(key, value) {
-    try {
-      localStorage.setItem(key, value);
-      this._memory[key] = value;
-    } catch (e) {
-      console.warn("safeStorage setItem skip:", e?.name, key);
-      this._memory[key] = value;
-    }
-  },
-  removeItem(key) {
-    try {
-      localStorage.removeItem(key);
-      delete this._memory[key];
-    } catch (e) {
-      console.warn("safeStorage removeItem skip:", e?.name);
-      delete this._memory[key];
-    }
+// FIX TOTAL: BACA SEMUA VERSI ENV BIAR GAK PUTIH LAGI OWY!
+const getEnv = (viteName, nextName, reactName) => {
+  if (typeof import.meta !== "undefined" && import.meta.env) {
+    if (import.meta.env[viteName]) return import.meta.env[viteName];
   }
+  if (typeof process !== "undefined" && process.env) {
+    if (process.env[nextName]) return process.env[nextName];
+    if (process.env[reactName]) return process.env[reactName];
+  }
+  return null;
 };
 
-export const supabase = createClient(
-  url || "https://placeholder.supabase.co",
-  anonKey || "placeholder-key",
-  {
-    auth: {
-      persistSession: true,
-      autoRefreshToken: true,
-      detectSessionInUrl: true,
-      storage: safeStorage,
-      flowType: 'pkce'
-    },
-  },
-);
+const supabaseUrl = 
+  getEnv("VITE_SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_URL", "REACT_APP_SUPABASE_URL") ||
+  getEnv("VITE_SU_ASE_URL", "NEXT_PU_ASE_URL", "REACT_A_ASE_URL");
 
-export async function healthCheck() {
-  if (!url || !anonKey) return false;
-  try {
-    const { error } = await supabase.from("outlets").select("id", { head: true, count: "exact" });
-    if (error) {
-      console.error("[supabase] health check FAILED:", error.message);
-      return false;
-    }
-    console.info("[supabase] health check OK");
-    return true;
-  } catch (e) {
-    console.warn("[supabase] health check offline:", e?.name);
-    return false;
-  }
+const supabaseAnonKey = 
+  getEnv("VITE_SUPABASE_ANON_KEY", "NEXT_PUBLIC_SUPABASE_ANON_KEY", "REACT_APP_SUPABASE_ANON_KEY") ||
+  getEnv("VITE_SU_NON_KEY", "NEXT_PU_NON_KEY", "REACT_A_NON_KEY") ||
+  getEnv("VITE_SUPABASE_ANON_KEY", "NEXT_PU_BLE_KEY", "REACT_APP_FORCE");
+
+console.log("[SUPABASE] URL:", supabaseUrl ? "OK " + supabaseUrl.slice(0,30)+"..." : "KOSONG!");
+console.log("[SUPABASE] KEY:", supabaseAnonKey ? "OK ADA" : "KOSONG!");
+
+if (!supabaseUrl) {
+  throw new Error("SUPABASE URL KOSONG! Cek Vercel Environment Variables: VITE_SUPABASE_URL");
 }
+if (!supabaseAnonKey) {
+  throw new Error("SUPABASE KEY KOSONG! Cek Vercel Environment Variables: VITE_SUPABASE_ANON_KEY");
+}
+
+export const supabase = createClient(supabaseUrl, supabaseAnonKey);
