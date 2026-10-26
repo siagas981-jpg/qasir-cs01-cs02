@@ -1,13 +1,12 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/lib/supabase";
+import { supabase } from "../lib/supabase";
 import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Button } from "../components/ui/button";
+import { Input } from "../components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 
 export default function Laci5InfoKasir() {
-  // FIX BUILD: jangan pakai useOutlet/useShift yang gak ada
   const activeOutletId = localStorage.getItem("active_outlet_id") || "87aab4db-13a9-4fed-b00c-495fbdb46965";
   const shift = { currentShift: "SHIFT_1", shiftName: "SHIFT_1" };
   const qc = useQueryClient();
@@ -75,40 +74,17 @@ export default function Laci5InfoKasir() {
       const namaUpper = (selectedLaci.nama || "").toUpperCase();
       const isKhususBank = KHUSUS_AUTO_CASHBANK.some((k) => namaUpper.includes(k));
 
-      const { data: allLaciFresh } = await supabase
-        .from("laci")
-        .select("*")
-        .eq("outlet_id", activeOutletId);
-
+      const { data: allLaciFresh } = await supabase.from("laci").select("*").eq("outlet_id", activeOutletId);
       const cashBankLaci = allLaciFresh?.find((l) => {
         const n = (l.nama || "").toUpperCase();
         const k = (l.kode || "").toUpperCase();
         return k === "LACI_5_CASHBANK" || k.includes("CASHBANK") || (n.includes("CASH") && n.includes("BANK"));
       });
 
-      if (bankTipe === "keluar") {
-        if ((selectedLaci.saldo || 0) < jumlahNum) {
-          toast.error(
-            `Saldo ${selectedLaci.nama} tidak cukup! Sisa Rp ${Number(
-              selectedLaci.saldo || 0
-            ).toLocaleString("id-ID")}`
-          );
-          setBankLoading(false);
-          return;
-        }
-      }
-
-      if (bankTipe === "masuk" && isKhususBank) {
-        if (!cashBankLaci) {
-          toast.error("CASH BANK tidak ada");
-          setBankLoading(false);
-          return;
-        }
-        if ((cashBankLaci.saldo || 0) < jumlahNum) {
-          toast.error(`Saldo CASH BANK tidak cukup! Sisa Rp ${Number(cashBankLaci.saldo || 0).toLocaleString("id-ID")}`);
-          setBankLoading(false);
-          return;
-        }
+      if (bankTipe === "keluar" && (selectedLaci.saldo || 0) < jumlahNum) {
+        toast.error(`Saldo ${selectedLaci.nama} tidak cukup! Sisa Rp ${Number(selectedLaci.saldo || 0).toLocaleString("id-ID")}`);
+        setBankLoading(false);
+        return;
       }
 
       const { data: userData } = await supabase.auth.getUser();
@@ -136,28 +112,15 @@ export default function Laci5InfoKasir() {
           p_email: emailUser,
         });
         if (rpcErr) throw rpcErr;
-        toast.success(
-          bankTipe === "keluar"
-            ? `${selectedLaci.nama} KELUAR ${bankJumlah} -> CASH BANK +${bankJumlah}`
-            : `CASH BANK -> ${selectedLaci.nama} +Rp ${bankJumlah}`
-        );
       } else {
-        const newSaldo =
-          bankTipe === "keluar"
-            ? (selectedLaci.saldo || 0) - jumlahNum
-            : (selectedLaci.saldo || 0) + jumlahNum;
-        const { error: e1 } = await supabase.from("laci").update({ saldo: newSaldo }).eq("id", selectedLaci.id);
-        if (e1) throw e1;
-        toast.success(`Transaksi ${bankTipe} ${selectedLaci.nama} Rp ${bankJumlah} berhasil!`);
+        const newSaldo = bankTipe === "keluar" ? (selectedLaci.saldo || 0) - jumlahNum : (selectedLaci.saldo || 0) + jumlahNum;
+        await supabase.from("laci").update({ saldo: newSaldo }).eq("id", selectedLaci.id);
       }
 
-      setBankJumlah("");
-      setBankKet("");
-      setBankLaciId("");
+      toast.success("Berhasil!");
+      setBankJumlah(""); setBankKet(""); setBankLaciId("");
       qc.invalidateQueries({ queryKey: ["laci-bank"] });
-      qc.invalidateQueries({ queryKey: ["laci-all"] });
     } catch (e) {
-      console.error(e);
       toast.error("Gagal: " + e.message);
     } finally {
       setBankLoading(false);
@@ -170,63 +133,35 @@ export default function Laci5InfoKasir() {
         <h3 className="font-semibold text-sm mb-3">Transaksi Bank (Auto Saldo Laci 5)</h3>
         <div className="grid grid-cols-2 gap-2 mb-2">
           <Select value={bankLaciId} onValueChange={setBankLaciId}>
-            <SelectTrigger>
-              <SelectValue placeholder="Pilih Bank" />
-            </SelectTrigger>
+            <SelectTrigger><SelectValue placeholder="Pilih Bank" /></SelectTrigger>
             <SelectContent>
               {laciBank.map((l) => (
-                <SelectItem key={l.id} value={l.id}>
-                  {l.nama} - Rp {(l.saldo || 0).toLocaleString("id-ID")}
-                </SelectItem>
+                <SelectItem key={l.id} value={l.id}>{l.nama} - Rp {(l.saldo || 0).toLocaleString("id-ID")}</SelectItem>
               ))}
             </SelectContent>
           </Select>
           <Select value={bankTipe} onValueChange={setBankTipe}>
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
+            <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="masuk">Masuk (+)</SelectItem>
               <SelectItem value="keluar">Keluar (-)</SelectItem>
             </SelectContent>
           </Select>
         </div>
-        <Input
-          placeholder="Jumlah Rp (contoh 50000)"
-          value={bankJumlah}
-          onChange={(e) => setBankJumlah(formatRupiahInput(e.target.value))}
-          className="mb-2"
-        />
-        <Input
-          placeholder="Keterangan (opsional)"
-          value={bankKet}
-          onChange={(e) => setBankKet(e.target.value)}
-          className="mb-3"
-        />
-        <Button onClick={handleBankTx} disabled={bankLoading} className="w-full bg-green-700 hover:bg-green-800 text-white">
-          {bankLoading ? "Menyimpan..." : `Simpan ${bankTipe.toUpperCase()} - Shift 1`}
+        <Input placeholder="Jumlah Rp" value={bankJumlah} onChange={(e) => setBankJumlah(formatRupiahInput(e.target.value))} className="mb-2" />
+        <Input placeholder="Keterangan" value={bankKet} onChange={(e) => setBankKet(e.target.value)} className="mb-3" />
+        <Button onClick={handleBankTx} disabled={bankLoading} className="w-full bg-green-700 text-white">
+          {bankLoading ? "Menyimpan..." : `Simpan ${bankTipe.toUpperCase()}`}
         </Button>
       </div>
-
-      <div className="flex justify-between items-center">
-        <h4 className="text-sm font-semibold">Laci ({laciBank.length})</h4>
-        <span className="text-xs bg-yellow-100 px-2 py-1 rounded">OWNER FULL ACCESS</span>
-      </div>
-
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 gap-3">
         {laciBank.map((l) => (
-          <div key={l.id} className="border rounded-lg p-3 bg-white shadow-sm">
-            <p className="text-[10px] text-gray-400 uppercase">{l.kode}</p>
+          <div key={l.id} className="border rounded-lg p-3 bg-white">
+            <p className="text-[10px] text-gray-400">{l.kode}</p>
             <p className="font-bold text-sm">{l.nama}</p>
-            <p className={`font-bold ${l.saldo < 0 ? "text-red-600" : "text-green-700"}`}>
-              Rp {(l.saldo || 0).toLocaleString("id-ID")}
-            </p>
+            <p className={`font-bold ${l.saldo < 0 ? "text-red-600" : "text-green-700"}`}>Rp {(l.saldo || 0).toLocaleString("id-ID")}</p>
           </div>
         ))}
-      </div>
-
-      <div className="fixed bottom-4 right-4 bg-gray-900 text-white text-xs px-4 py-2 rounded-full">
-        LACI 5 • Rp {totalLaci5.toLocaleString("id-ID")} ▼
       </div>
     </div>
   );
