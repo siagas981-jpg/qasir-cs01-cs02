@@ -34,7 +34,6 @@ export default function LaciManager({ outletId }) {
     enabled: !!outletId 
   });
   
-  // FIX: JANGAN FILTER outlet_id BIAR PASTI MUNCUL (2x) JADI (3x)
   const { data: riwayatTransfer = [] } = useQuery({
     queryKey: ["transfer-laci", outletId],
     queryFn: async () => {
@@ -54,12 +53,31 @@ export default function LaciManager({ outletId }) {
     qc.invalidateQueries({ queryKey: ["laci-all"] });
   };
 
-    const handleTransfer = async () => {
-    try {
-      const realOutletId = outletId || fromLaci?.outlet_id || '87aab4db-13a9-4fed-b00c-495fbdb46965';
-      const finalTo = toLaci || lacis.find(l => l.id === transfer.to);
+  const handleEditFull = async () => {
+    const { error } = await supabase.from("laci").update({ kode: openEdit.kode, nama: openEdit.nama, saldo: openEdit.saldo }).eq("id", openEdit.id);
+    if (error) return toast.error(error.message);
+    toast.success("Updated!");
+    setOpenEdit(null);
+    qc.invalidateQueries({ queryKey: ["laci-all"] });
+  };
 
-      if (!fromLaci || !finalTo || !jumlah || jumlah <= 0) {
+  const handleDelete = async (laci) => {
+    if (!confirm(`Hapus ${laci.nama}?`)) return;
+    const { error } = await supabase.from("laci").delete().eq("id", laci.id);
+    if (error) return toast.error(error.message);
+    toast.success("Dihapus");
+    qc.invalidateQueries({ queryKey: ["laci-all"] });
+  };
+
+  const handleTransfer = async (e) => {
+    if (e) e.preventDefault();
+    try {
+      const fromLaci = lacis.find(l => l.id === transfer.from);
+      const toLaci = lacis.find(l => l.id === transfer.to);
+      const jumlah = Number(transfer.amount) || 0;
+      const realOutletId = outletId || fromLaci?.outlet_id || '87aab4db-13a9-4fed-b00c-495fbdb46965';
+
+      if (!fromLaci || !toLaci || !jumlah || jumlah <= 0) {
         return toast.error("Lengkapi data transfer!");
       }
 
@@ -68,7 +86,7 @@ export default function LaciManager({ outletId }) {
         .insert({
           outlet_id: realOutletId,
           dari_nama: fromLaci.nama,
-          ke_nama: finalTo.nama,
+          ke_nama: toLaci.nama,
           jumlah: jumlah
         })
         .select();
@@ -81,40 +99,18 @@ export default function LaciManager({ outletId }) {
       console.log("BERHASIL INSERT:", data);
 
       await supabase.from("laci").update({ saldo: Number(fromLaci.saldo||0) - jumlah }).eq("id", fromLaci.id);
-      await supabase.from("laci").update({ saldo: Number(finalTo.saldo||0) + jumlah }).eq("id", finalTo.id);
+      await supabase.from("laci").update({ saldo: Number(toLaci.saldo||0) + jumlah }).eq("id", toLaci.id);
 
-      toast.success(`Berhasil ${fromLaci.nama} → ${finalTo.nama} ${rupiah(jumlah)}`);
+      toast.success(`Berhasil ${fromLaci.nama} → ${toLaci.nama} ${rupiah(jumlah)}`);
       setOpenTransfer(false);
       setTransfer({ from: "", to: "", amount: 0 });
+      
+      // INI YANG BIKIN SETIAP TRANSFER LANGSUNG KEBACA RIWAYATNYA
       qc.invalidateQueries({ queryKey: ["laci-all"] });
       qc.invalidateQueries({ queryKey: ["transfer-laci"] });
       qc.invalidateQueries({ queryKey: ["riwayat-transfer-laci"] });
       qc.invalidateQueries({ queryKey: ["transaksi"] });
 
-    } catch (err) {
-      toast.error("ERROR: " + err.message);
-    }
-  };
-  console.log("BERHASIL INSERT:", data);
-toast.success("Transfer " + jumlah + " berhasil!");
-
-// INI YANG BIKIN RIWAYAT LANGSUNG KEBACA
-qc.invalidateQueries({ queryKey: ["transfer-laci"] });
-qc.invalidateQueries({ queryKey: ["laci-all"] });
-qc.invalidateQueries({ queryKey: ["riwayat-transfer"] });
-      }
-
-      await supabase.from("laci").update({ saldo: Number(fromLaci.saldo||0) - jumlah }).eq("id", fromLaci.id);
-      await supabase.from("laci").update({ saldo: Number(finalTo.saldo||0) + jumlah }).eq("id", finalTo.id);
-
-      toast.success(`Berhasil ${fromLaci.nama} → ${finalTo.nama} ${rupiah(jumlah)}`);
-      setOpenTransfer(false);
-      setTransfer({ from: "", to: "", amount: 0 });
-qc.invalidateQueries({ queryKey: ["laci-all"] });
-qc.invalidateQueries({ queryKey: ["transfer-laci"] });
-// TAMBAHKAN 2 BARIS INI BIAR SEMUA RIWAYAT KE REFRESH
-qc.invalidateQueries({ queryKey: ["riwayat-transfer-laci"] });
-qc.invalidateQueries({ queryKey: ["transaksi"] });
     } catch (err) {
       toast.error("ERROR: " + err.message);
     }
