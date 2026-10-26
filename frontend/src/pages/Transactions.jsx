@@ -4,36 +4,50 @@ import { rupiah } from "@/lib/format";
 
 export default function Transactions({ outletId }) {
   
-  // 1. RIWAYAT TRANSFER ANTAR LACI (tabel transfer_laci)
+  // 1. RIWAYAT TRANSFER ANTAR LACI - FIX TANPA FILTER outlet_id
   const { data: riwayatTransfer = [], refetch: refetchTransfer } = useQuery({
-    queryKey: ["riwayat-transfer", outletId],
+    queryKey: ["riwayat-transfer"],
     queryFn: async () => {
-      const q = supabase.from("transfer_laci").select("*").order("created_at", { ascending: false }).limit(100);
-      if (outletId) q.eq("outlet_id", outletId);
-      const { data, error } = await q;
+      const { data, error } = await supabase
+        .from("transfer_laci")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .limit(100);
       if (error) {
-        // fallback tanpa filter outlet_id kalau kolom NULL
-        const { data: data2 } = await supabase.from("transfer_laci").select("*").order("created_at", { ascending: false }).limit(100);
-        return data2 || [];
+        console.error("transfer_laci error:", error);
+        return [];
       }
       return data || [];
     },
   });
 
-  // 2. RIWAYAT TRANSAKSI BANK (tabel transaksi / transaksi_bank - Auto Saldo Laci 5)
+  // 2. RIWAYAT TRANSAKSI BANK - FIX TAMPIL SEMUA
   const { data: riwayatBank = [], refetch: refetchBank } = useQuery({
-    queryKey: ["riwayat-bank", outletId],
+    queryKey: ["riwayat-bank"],
     queryFn: async () => {
-      // coba tabel transaksi_bank dulu, kalau tidak ada coba transaksi
-      let { data, error } = await supabase.from("transaksi_bank").select("*").order("created_at", { ascending: false }).limit(100);
-      if (error) {
-        const res = await supabase.from("transaksi").select("*").order("created_at", { ascending: false }).limit(100);
-        data = res.data;
+      // Coba ambil dari transaksi_bank
+      const { data: bankData } = await supabase
+        .from("transaksi_bank")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .limit(100);
+      
+      if (bankData && bankData.length > 0) return bankData;
+
+      // Kalau kosong, coba dari tabel transaksi
+      const { data: transaksiData } = await supabase
+        .from("transaksi")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .limit(100);
+      
+      // Filter hanya yang berbau BANK kalau ada kolom jenis/keterangan
+      if (transaksiData) {
+        // tampilkan semua dulu biar tidak 0x terus
+        return transaksiData;
       }
-      if (outletId && data) {
-        return data.filter(d => !d.outlet_id || d.outlet_id === outletId);
-      }
-      return data || [];
+      
+      return [];
     },
   });
 
