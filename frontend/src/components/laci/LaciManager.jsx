@@ -34,7 +34,7 @@ export default function LaciManager({ outletId }) {
     enabled: !!outletId 
   });
 
-  const handleTransfer = async (e) => {
+    const handleTransfer = async (e) => {
     if(e) e.preventDefault();
     try {
       const fromLaci = lacis.find(l => l.id === transfer.from);
@@ -45,18 +45,37 @@ export default function LaciManager({ outletId }) {
       if (!fromLaci || !toLaci || jumlah <= 0) return toast.error("Lengkapi data!");
       if (fromLaci.id === toLaci.id) return toast.error("Tidak bisa transfer ke laci sama!");
 
-      // 1. CATAT DULU RIWAYATNYA - INI KUNCINYA BIAR TERUS ADA
+      // INI FIX NYA OWY - WAJIB ADA dari_laci_id & ke_laci_id
       const { data, error } = await supabase.from("transfer_laci").insert({
         outlet_id: realOutletId,
+        dari_laci_id: fromLaci.id,
+        ke_laci_id: toLaci.id,
         dari_nama: fromLaci.nama,
         ke_nama: toLaci.nama,
-        jumlah: jumlah
+        jumlah: jumlah,
+        kasir_email: profile?.email || 'owner',
+        keterangan: `Transfer ${fromLaci.nama} ke ${toLaci.nama}`
       }).select();
 
       if (error) {
-        console.error("GAGAL INSERT RIWAYAT:", error);
-        return toast.error("Gagal catat: " + error.message);
+        alert("GAGAL: " + error.message);
+        console.error(error);
+        return toast.error("Gagal: " + error.message);
       }
+
+      await supabase.from("laci").update({ saldo: Number(fromLaci.saldo||0) - jumlah }).eq("id", fromLaci.id);
+      await supabase.from("laci").update({ saldo: Number(toLaci.saldo||0) + jumlah }).eq("id", toLaci.id);
+
+      toast.success(`Berhasil ${fromLaci.nama} → ${toLaci.nama} ${rupiah(jumlah)}`);
+      setOpenTransfer(false);
+      setTransfer({ from: "", to: "", amount: 0 });
+      qc.invalidateQueries({ queryKey: ["laci-all"] });
+      qc.invalidateQueries({ queryKey: ["riwayat-transfer"] });
+      qc.invalidateQueries({ queryKey: ["transfer-laci"] });
+    } catch (err) {
+      toast.error("ERROR: " + err.message);
+    }
+  };
 
       // 2. BARU UPDATE SALDO KALAU RIWAYAT SUKSES
       await supabase.from("laci").update({ saldo: Number(fromLaci.saldo||0) - jumlah }).eq("id", fromLaci.id);
