@@ -1,12 +1,10 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { createClient } from "@supabase/supabase-js";
+import { supabase } from "../lib/supabase/client.js";
 import { toast } from "sonner";
 
-const supabase = createClient(
-  import.meta.env.VITE_SUPABASE_URL,
-  import.meta.env.VITE_SUPABASE_ANON_KEY
-);
+// === FIX ANTI PUTIH V10 - PAKAI CLIENT PUSAT, BUKAN VITE OWY! ===
+// const supabase = createClient(...) DIHAPUS OWY! SEKARANG IMPORT DARI CLIENT.JS!
 
 // === INI YANG HILANG BIKIN BUILD GAGAL OWY! AKU TAMBAHIN! ===
 export const fetchProducts = async (outletId) => {
