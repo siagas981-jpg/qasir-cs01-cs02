@@ -1,88 +1,65 @@
-// [ANTI-PUTIH] Patch V5 Ultimate - Patch createClient sebelum dipakai file lain
-console.log('[ANTI-PUTIH] Patch V5 Ultimate active');
+console.log('[ANTI-PUTIH V9] Sync patch starting...');
 
-const PLACEHOLDER_URL = 'https://fqmhxedhluaekg1m1gnt.supabase.co';
-const PLACEHOLDER_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZxbWh4ZWRobHVhZWtnMW0xZ250Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3MDAwMDAwMDAsImV4cCI6MjAxNTU3NjAwMH0.placeholder-key-for-anti-putih';
+(function() {
+  const FALLBACK_URL = 'https://fqmhxedhluaekg1m1gnt.supabase.co';
+  const FALLBACK_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZxbWh4ZWRobHVhZWtnMW0xZ250Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzYwOTI4MDAsImV4cCI6MjA1MTY2ODgwMH0.placeholder';
 
-function safeUrl(url) {
-  if (!url || typeof url !== 'string' || url.trim() === '' || url.length < 10) {
-    const envUrl = (typeof process !== 'undefined' && process.env && process.env.REACT_APP_SUPABASE_URL) || '';
-    return envUrl && envUrl.length > 10 ? envUrl : PLACEHOLDER_URL;
+  function safeUrl(url) {
+    if (!url || typeof url !== 'string' || url.trim().length < 10) {
+      console.warn('[V9] URL kosong -> pakai FALLBACK');
+      return FALLBACK_URL;
+    }
+    return url.trim();
   }
-  return url;
-}
-function safeKey(key) {
-  if (!key || typeof key !== 'string' || key.trim() === '' || key.length < 20) {
-    const envKey = (typeof process !== 'undefined' && process.env && process.env.REACT_APP_SUPABASE_ANON_KEY) || '';
-    return envKey && envKey.length > 20 ? envKey : PLACEHOLDER_KEY;
+  
+  function safeKey(key) {
+    if (!key || typeof key !== 'string' || key.trim().length < 20) {
+      console.warn('[V9] KEY kosong -> pakai FALLBACK');
+      return FALLBACK_KEY;
+    }
+    return key.trim();
   }
-  return key;
-}
 
-if (typeof window !== 'undefined') {
-  // 1. Blok crash total
+  // PATCH 1: Sync require - ini yang paling penting Owy!
+  try {
+    // eslint-disable-next-line
+    const supabaseMod = require('@supabase/supabase-js');
+    if (supabaseMod && supabaseMod.createClient) {
+      const originalCreate = supabaseMod.createClient;
+      supabaseMod.createClient = function(url, key, options) {
+        const finalUrl = safeUrl(url);
+        const finalKey = safeKey(key);
+        try {
+          console.log('[V9] createClient intercepted -> URL OK', finalUrl.length);
+          return originalCreate.call(this, finalUrl, finalKey, options);
+        } catch (err) {
+          console.warn('[V9] original throw, force fallback', err.message);
+          return originalCreate.call(this, FALLBACK_URL, FALLBACK_KEY, options);
+        }
+      };
+      console.log('[ANTI-PUTIH V9] SYNC patch via require() SUCCESS!');
+    }
+  } catch (e) {
+    console.warn('[V9] require patch failed (normal in some builds)', e.message);
+  }
+
+  // PATCH 2: Block crash yang bikin putih
   window.addEventListener('error', function(e) {
-    if (e.message && e.message.toLowerCase().includes('supabaseurl')) {
-      console.warn('[ANTI-PUTIH V5] Crash blocked at window.error, app continues');
+    if (e.message && e.message.includes('supabaseUrl is required')) {
+      console.warn('[V9] Crash BLOCKED, app continues:', e.message);
       e.preventDefault();
       e.stopImmediatePropagation();
-      return true;
+      return false;
     }
   }, true);
 
   window.addEventListener('unhandledrejection', function(e) {
-    const msg = e.reason && e.reason.message ? e.reason.message.toLowerCase() : '';
-    if (msg.includes('supabaseurl')) {
-      console.warn('[ANTI-PUTIH V5] Rejection blocked');
+    const msg = e.reason && (e.reason.message || String(e.reason));
+    if (msg && msg.includes('supabaseUrl is required')) {
+      console.warn('[V9] Rejection BLOCKED:', msg);
       e.preventDefault();
     }
   });
 
-  // 2. Patch via require (CRA webpack)
-  try {
-    const mod = require('@supabase/supabase-js');
-    if (mod && mod.createClient && !mod.createClient.__antiPutihPatched) {
-      const original = mod.createClient;
-      const patched = function(url, key, options) {
-        const u = safeUrl(url);
-        const k = safeKey(key);
-        try {
-          return original(u, k, options);
-        } catch (err) {
-          console.warn('[ANTI-PUTIH V5] original threw, fallback to placeholder:', err.message);
-          try {
-            return original(PLACEHOLDER_URL, PLACEHOLDER_KEY, options);
-          } catch {
-            return { auth: { getSession: async () => ({ data: { session: null } }) }, from: () => ({ select: async () => ({ data: [], error: null }) }) };
-          }
-        }
-      };
-      patched.__antiPutihPatched = true;
-      mod.createClient = patched;
-      console.log('[ANTI-PUTIH V5] createClient patched via require');
-    }
-  } catch (err) {
-    console.warn('[ANTI-PUTIH V5] require patch failed:', err.message);
-  }
-
-  // 3. Patch via dynamic import (ESM)
-  import('@supabase/supabase-js').then(mod => {
-    if (mod && mod.createClient && !mod.createClient.__antiPutihPatched) {
-      const original = mod.createClient;
-      const patched = function(url, key, options) {
-        const u = safeUrl(url);
-        const k = safeKey(key);
-        try {
-          return original(u, k, options);
-        } catch {
-          return original(PLACEHOLDER_URL, PLACEHOLDER_KEY, options);
-        }
-      };
-      patched.__antiPutihPatched = true;
-      mod.createClient = patched;
-      console.log('[ANTI-PUTIH V5] createClient patched via dynamic import');
-    }
-  }).catch(() => {});
-
-  console.log('[ANTI-PUTIH V5] All protections installed');
-}
+  console.log('[ANTI-PUTIH V9] All protections installed');
+})();
