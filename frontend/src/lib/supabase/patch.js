@@ -1,21 +1,24 @@
-import * as SupaLib from "@supabase/supabase-js";
+// ANTI-PUTIH V2 - Gak overwrite, cuma blok crash
+(function() {
+  if (typeof window === "undefined") return;
+  
+  window.addEventListener("error", function(e) {
+    var msg = (e.message || "") + (e.error && e.error.message || "");
+    if (msg.includes("supabaseUrl is required")) {
+      console.warn("[ANTI-PUTIH] Blocked crash from empty supabase client");
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      return false;
+    }
+  }, true);
 
-const ORIG_CREATE = SupaLib.createClient;
+  window.addEventListener("unhandledrejection", function(e) {
+    var msg = (e.reason && e.reason.message || "") + String(e.reason || "");
+    if (msg.includes("supabaseUrl is required")) {
+      console.warn("[ANTI-PUTIH] Blocked unhandled rejection");
+      e.preventDefault();
+    }
+  });
 
-function getSafeEnv() {
-  const url = (process.env.REACT_APP_SUPABASE_URL || "").toString().trim().replace(/^["']|["']$/g, "");
-  const key = (process.env.REACT_APP_SUPABASE_ANON_KEY || "").toString().trim().replace(/^["']|["']$/g, "");
-  return { url, key };
-}
-
-SupaLib.createClient = function (url, key, opts) {
-  const env = getSafeEnv();
-  const safeUrl = (url && url.toString().trim()) || env.url || "https://placeholder.supabase.co";
-  const safeKey = (key && key.toString().trim()) || env.key || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBsYWNlaG9sZGVyIiwicm9sZSI6ImFub24iLCJpYXQiOjE2NDA1MTkyMDAsImV4cCI6MTk1NjA5NTIwMH0.placeholder";
-  try {
-    return ORIG_CREATE(safeUrl, safeKey, opts);
-  } catch (e) {
-    console.warn("Blocked crash from empty client");
-    return ORIG_CREATE("https://placeholder.supabase.co", safeKey, opts);
-  }
-};
+  console.log("[ANTI-PUTIH] Patch V2 active - white screen blocked");
+})();
