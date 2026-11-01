@@ -1,8 +1,10 @@
 import { createClient } from "@supabase/supabase-js";
 
-// HARDCODE LANGSUNG OWY, BIAR GAK KOSONG LAGI!
+// ID ASLI DARI SCREENSHOT OWY TADI!
 const SUPABASE_URL = "https://fqmhxedhluaekg1m1gnt.supabase.co";
-const SUPABASE_ANON_KEY = "sb_publishable_ru5GxQyP9z8a7b6c5d4e3f2g1h0iJkL... GANTI INI DENGAN KEY FULL ASLI YANG OWY COPY DARI SUPABASE!";
+
+// COPY DARI HALAMAN API KEYS -> PUBLISHABLE KEY (klik Copy!)
+const SUPABASE_ANON_KEY = "sb_publishable_...PASTE FULL DARI SUPABASE DISINI JANGAN ADA ...!";
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
